@@ -1,0 +1,5 @@
+.agents/
+.scratch/
+doc/
+dist/
+node_modules/
