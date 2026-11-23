@@ -132,7 +132,6 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
                       >
                         <span className="calendar-day-number">{dayNumber}</span>
                         <span className="calendar-markers" aria-hidden="true">
-                          {hasPeriodStart && <span className="period-start-mark" />}
                           {isForecastRange && <span className="forecast-range-mark" />}
                           {isForecastCenter && <span className="forecast-center-mark" />}
                           {(isForecastLowerBound || isForecastUpperBound) && <span className="forecast-bound-mark" />}
@@ -148,15 +147,27 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
       </table>
 
       <ul className="calendar-legend" aria-label="Légende du calendrier">
+        {today.slice(0, 7) === monthStart.slice(0, 7) && (
+          <li>
+            <span className="calendar-today-mark" aria-hidden="true" />
+            Aujourd’hui
+          </li>
+        )}
         <li>
           <span className="period-start-mark" aria-hidden="true" />
           Début enregistré
         </li>
         {estimate.kind === 'range' && (
-          <li>
-            <span className="forecast-range-mark" aria-hidden="true" />
-            Plage estimée
-          </li>
+          <>
+            <li>
+              <span className="forecast-range-mark" aria-hidden="true" />
+              Plage estimée
+            </li>
+            <li>
+              <span className="forecast-bound-mark" aria-hidden="true" />
+              Bornes basse et haute
+            </li>
+          </>
         )}
         {estimate.kind !== 'insufficient' && (
           <li>

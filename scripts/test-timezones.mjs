@@ -9,6 +9,7 @@ const civilDateTests = [
   'src/domain/periods/index.test.ts',
   'src/domain/dates/index.test.ts',
   'src/domain/forecast/estimate-next-period.test.ts',
+  'src/domain/history/get-cycle-history.test.ts',
 ]
 
 for (const timeZone of timeZones) {
