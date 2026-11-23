@@ -6,6 +6,18 @@ sauvegardes JSON versionnées. La saisie, l’accueil, le calendrier et les
 estimations descriptives sont disponibles; l’interface d’import/export reste à
 construire.
 
+L'objet de ce projet vient du fait que les applications de suivi de menstruations déjà existantent
+sont propriétaires, avec des algorithmes propriétaires et peuvent stocker vos données. Pourquoi pas
+avoir la même application en local et transparante sur les algorithmes ?
+
+
+## Installer sur IPhone
+1. Copier ce lien : <lien.com>
+2. Ouvrir Safari et coller le lien
+3. Faire partager, puis un peu en bas "Ajotuer à l'écran d'acceuil"
+4. Ouvrez l'icone crée comme une application
+
+
 ## Développement
 
 ```bash
@@ -40,4 +52,3 @@ validation Safari/iOS sur appareil réel reste à exécuter; voir
 - Tailwind CSS v4 et tokens CSS définis dans `src/index.css`
 - Vitest et Testing Library
 - `vite-plugin-pwa` pour le manifeste et le service worker
-# PeriodPeriods
