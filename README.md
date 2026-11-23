@@ -10,13 +10,15 @@ L'objet de ce projet vient du fait que les applications de suivi de menstruation
 sont propriétaires, avec des algorithmes propriétaires et peuvent stocker vos données. Pourquoi pas
 avoir la même application en local et transparante sur les algorithmes ?
 
+## Installer sur iPhone
 
-## Installer sur IPhone
-1. Copier ce lien : <lien.com>
-2. Ouvrir Safari et coller le lien
-3. Faire partager, puis un peu en bas "Ajotuer à l'écran d'acceuil"
-4. Ouvrez l'icone crée comme une application
+1. Ouvrir [PeriodPeriods](https://useless289.github.io/PeriodPeriods/) dans Safari.
+2. Toucher **Partager**, puis **Ajouter à l’écran d’accueil**.
+3. Confirmer avec **Ajouter**, puis ouvrir l’icône depuis l’écran d’accueil.
 
+Les données restent dans le stockage local de cet appareil et ne sont pas
+synchronisées entre appareils. L’interface d’import/export des sauvegardes n’est
+pas encore disponible.
 
 ## Développement
 
