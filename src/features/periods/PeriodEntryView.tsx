@@ -1,9 +1,10 @@
 import { ChevronRight, LockKeyhole } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { CivilDate, Period } from '../../domain/periods'
 import type { PeriodStartEstimate } from '../../domain/forecast/estimate-next-period'
 import { CycleHistoryView } from '../history/CycleHistoryView'
+import { CompactDatePicker } from '../shared/CompactDatePicker'
 import { formatCivilDate } from '../shared/format-civil-date'
 
 export type PeriodSaveError = {
@@ -15,6 +16,7 @@ type PeriodEntryViewProps = {
   periods: Period[]
   estimate: PeriodStartEstimate
   today: CivilDate
+  firstDayOfWeek: 0 | 1
   saveMessage: string | null
   saveError: PeriodSaveError | null
   onClearSaveError: () => void
@@ -26,6 +28,7 @@ export function PeriodEntryView({
   periods,
   estimate,
   today,
+  firstDayOfWeek,
   saveMessage,
   saveError,
   onClearSaveError,
@@ -35,22 +38,43 @@ export function PeriodEntryView({
   const [startDate, setStartDate] = useState(today)
   const [dateError, setDateError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
-  const startDateInputRef = useRef<HTMLInputElement>(null)
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const [isConfirmationReady, setIsConfirmationReady] = useState(false)
+  const datePickerTriggerRef = useRef<HTMLButtonElement>(null)
+  const datePickerAnchorRef = useRef<HTMLDivElement>(null)
+  const submitButtonRef = useRef<HTMLButtonElement>(null)
+  const focusAfterCloseRef = useRef<'trigger' | 'submit' | null>(null)
   const latestPeriod = periods.at(-1)
+
+  useLayoutEffect(() => {
+    if (isCalendarOpen || !focusAfterCloseRef.current) return
+
+    const focusTarget =
+      focusAfterCloseRef.current === 'trigger' ? datePickerTriggerRef.current : submitButtonRef.current
+    focusTarget?.focus()
+    focusAfterCloseRef.current = null
+  }, [isCalendarOpen])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setDateError(null)
     onClearSaveError()
 
+    if (!isConfirmationReady) {
+      focusAfterCloseRef.current = 'submit'
+      setIsConfirmationReady(true)
+      setIsCalendarOpen(true)
+      return
+    }
+
     if (!startDate) {
       setDateError('Choisis une date de début.')
-      startDateInputRef.current?.focus()
+      datePickerTriggerRef.current?.focus()
       return
     }
     if (startDate > today) {
       setDateError('La date ne peut pas être dans le futur.')
-      startDateInputRef.current?.focus()
+      datePickerTriggerRef.current?.focus()
       return
     }
 
@@ -59,9 +83,32 @@ export function PeriodEntryView({
     setIsSaving(false)
     if (saved) {
       setStartDate(today)
+      setIsConfirmationReady(false)
     } else {
-      startDateInputRef.current?.focus()
+      datePickerTriggerRef.current?.focus()
     }
+  }
+
+  function openDatePicker(source: 'trigger' | 'submit') {
+    focusAfterCloseRef.current = source
+    setIsConfirmationReady(true)
+    setIsCalendarOpen(true)
+    setDateError(null)
+    onClearSaveError()
+  }
+
+  function cancelDatePicker() {
+    setIsCalendarOpen(false)
+    setIsConfirmationReady(false)
+  }
+
+  function selectDate(date: CivilDate) {
+    setStartDate(date)
+    setDateError(null)
+    onClearSaveError()
+    setIsConfirmationReady(true)
+    focusAfterCloseRef.current = 'submit'
+    setIsCalendarOpen(false)
   }
 
   const fieldError = dateError ?? saveError?.message ?? null
@@ -90,26 +137,36 @@ export function PeriodEntryView({
 
           <form className="entry-form" noValidate onSubmit={handleSubmit}>
             <div className="field-group">
-              <label htmlFor="period-start-date">Premier jour des règles</label>
-              <input
-                id="period-start-date"
-                name="periodStartDate"
-                ref={startDateInputRef}
-                type="date"
-                autoComplete="off"
-                value={startDate}
-                max={today}
-                required
-                aria-invalid={dateError || saveError?.invalidDate ? 'true' : undefined}
-                aria-describedby={fieldError ? 'period-start-hint period-start-error' : 'period-start-hint'}
-                onChange={(event) => {
-                  setStartDate(event.currentTarget.value)
-                  if (dateError) setDateError(null)
-                  if (saveError) onClearSaveError()
-                }}
-              />
+              <span className="field-label">Premier jour des règles</span>
+              <div className="date-picker-anchor" ref={datePickerAnchorRef}>
+                <button
+                  className="date-picker-trigger"
+                  id="period-start-date"
+                  ref={datePickerTriggerRef}
+                  type="button"
+                  aria-invalid={dateError || saveError?.invalidDate ? 'true' : undefined}
+                  aria-describedby={fieldError ? 'period-start-hint period-start-error' : 'period-start-hint'}
+                  aria-haspopup="dialog"
+                  aria-expanded={isCalendarOpen}
+                  onClick={() => openDatePicker('trigger')}
+                >
+                  <span className="visually-hidden">Premier jour des règles : </span>
+                  <span className="date-picker-value">{formatCivilDate(startDate)}</span>
+                  <span className="date-picker-change">Choisir une autre date</span>
+                </button>
+                {isCalendarOpen && (
+                  <CompactDatePicker
+                    value={startDate}
+                    today={today}
+                    firstDayOfWeek={firstDayOfWeek}
+                    anchorRef={datePickerAnchorRef}
+                    onSelect={selectDate}
+                    onCancel={cancelDatePicker}
+                  />
+                )}
+              </div>
               <p id="period-start-hint" className="field-hint">
-                Une date future ne peut pas être enregistrée.
+                Le calendrier commence à aujourd’hui. Choisis aujourd’hui ou une date passée.
               </p>
               {fieldError && (
                 <p className="field-error" id="period-start-error" role="alert">
@@ -117,8 +174,12 @@ export function PeriodEntryView({
                 </p>
               )}
             </div>
-            <button className="primary-button" type="submit" disabled={isSaving}>
-              {isSaving ? 'Enregistrement…' : 'Enregistrer le début'}
+            <button className="primary-button" ref={submitButtonRef} type="submit" disabled={isSaving}>
+              {isSaving
+                ? 'Enregistrement…'
+                : isConfirmationReady
+                  ? `Enregistrer le début du ${formatCivilDate(startDate)}`
+                  : 'Choisir une date'}
             </button>
           </form>
 

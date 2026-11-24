@@ -3,8 +3,9 @@
 Application web mobile-first de suivi des règles et du cycle menstruel. Le projet
 utilise IndexedDB pour gérer localement les périodes et les réglages, avec des
 sauvegardes JSON versionnées. La saisie, l’accueil, le calendrier et les
-estimations descriptives sont disponibles; l’interface d’import/export reste à
-construire.
+estimations descriptives sont disponibles. Les sauvegardes JSON v1 peuvent être
+exportées et importées depuis les réglages; l’import remplace dates et réglages
+après confirmation.
 
 L'objet de ce projet vient du fait que les applications de suivi de menstruations déjà existantent
 sont propriétaires, avec des algorithmes propriétaires et peuvent stocker vos données. Pourquoi pas
@@ -17,8 +18,8 @@ avoir la même application en local et transparante sur les algorithmes ?
 3. Confirmer avec **Ajouter**, puis ouvrir l’icône depuis l’écran d’accueil.
 
 Les données restent dans le stockage local de cet appareil et ne sont pas
-synchronisées entre appareils. L’interface d’import/export des sauvegardes n’est
-pas encore disponible.
+synchronisées entre appareils. Depuis **Réglages**, tu peux télécharger une
+sauvegarde JSON v1 ou importer un fichier après en avoir vérifié l’aperçu.
 
 ## Développement
 

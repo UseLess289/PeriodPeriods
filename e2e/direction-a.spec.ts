@@ -2,23 +2,40 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+function formatDate(date: string) {
+  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'UTC' }).format(
+    new Date(`${date}T00:00:00.000Z`),
+  )
+}
+
 async function recordStart(page: Page, startDate: string) {
-  await page.getByLabel('Premier jour des règles').fill(startDate)
-  await page.getByRole('button', { name: 'Enregistrer le début' }).click()
+  await page.getByRole('button', { name: /Premier jour des règles/ }).click()
+  const picker = page.getByRole('table', { name: /Calendrier de saisie pour/ })
+  const dateLabel = formatDate(startDate)
+  const dateName = new RegExp(`^${dateLabel}(?:, sélectionnée)?$`)
+  let attempts = 0
+  while ((await picker.getByRole('button', { name: dateName }).count()) === 0 && attempts < 48) {
+    await page.getByRole('button', { name: 'Mois précédent' }).click()
+    attempts += 1
+  }
+  await picker.getByRole('button', { name: dateName }).click()
+  await page.getByRole('button', { name: `Enregistrer le début du ${dateLabel}` }).click()
   await expect(page.locator('.form-feedback-success')).toContainText('Date enregistrée sur cet appareil.')
 }
 
 test('keeps estimate context, logging, and calendar markers clear on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.clock.install({ time: new Date('2025-03-27T12:00:00.000Z') })
+  await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 
   for (const startDate of ['2025-01-01', '2025-01-29', '2025-02-26', '2025-03-27']) {
     await recordStart(page, startDate)
   }
 
   const disclaimer = await page.locator('.forecast-disclaimer').boundingBox()
-  const saveButton = await page.getByRole('button', { name: 'Enregistrer le début' }).boundingBox()
+  const saveButton = await page.getByRole('button', { name: 'Choisir une date', exact: true }).boundingBox()
   const bottomNavigation = await page.locator('.bottom-nav').boundingBox()
   expect(disclaimer).not.toBeNull()
   expect(saveButton).not.toBeNull()
@@ -51,11 +68,15 @@ test('keeps estimate context, logging, and calendar markers clear on mobile', as
   const calendarAccessibility = await new AxeBuilder({ page }).analyze()
   expect(calendarAccessibility.violations).toEqual([])
 
-  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.getByRole('button', { name: 'Passer au thème sombre' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   const darkAccessibility = await new AxeBuilder({ page }).analyze()
   expect(darkAccessibility.violations).toEqual([])
 
-  await page.emulateMedia({ colorScheme: 'dark', contrast: 'more' })
+  await page.emulateMedia({ contrast: 'more' })
   const highContrastAccessibility = await new AxeBuilder({ page }).analyze()
   expect(highContrastAccessibility.violations).toEqual([])
+
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })

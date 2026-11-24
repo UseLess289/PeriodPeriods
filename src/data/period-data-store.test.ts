@@ -112,6 +112,26 @@ describe('period data store', () => {
     await expect(store.getPeriods()).resolves.toEqual([earlier, later])
   })
 
+  it('adds multiple distinct start dates atomically and returns them chronologically', async () => {
+    const added = await store.addPeriods([{ startDate: '2025-03-20' }, { startDate: '2025-03-08' }])
+
+    expect(added.map(({ startDate }) => startDate)).toEqual(['2025-03-08', '2025-03-20'])
+    await expect(store.getPeriods()).resolves.toEqual(added)
+  })
+
+  it('does not add any starts when a batch contains an existing or repeated date', async () => {
+    const existing = await store.addPeriod({ startDate: '2025-03-08' })
+
+    await expect(store.addPeriods([{ startDate: '2025-03-20' }, { startDate: '2025-03-08' }])).rejects.toBeInstanceOf(
+      DuplicatePeriodStartError,
+    )
+    await expect(store.addPeriods([{ startDate: '2025-03-20' }, { startDate: '2025-03-20' }])).rejects.toBeInstanceOf(
+      DuplicatePeriodStartError,
+    )
+
+    await expect(store.getPeriods()).resolves.toEqual([existing])
+  })
+
   it('does not reject overlapping periods when their start dates differ', async () => {
     await store.addPeriod({ startDate: '2025-03-08', endDate: '2025-03-20' })
     await store.addPeriod({ startDate: '2025-03-15', endDate: '2025-03-22' })

@@ -2,9 +2,28 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+function formatDate(date: string) {
+  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'UTC' }).format(
+    new Date(`${date}T00:00:00.000Z`),
+  )
+}
+
+async function selectEntryDate(page: Page, startDate: string) {
+  await page.getByRole('button', { name: /Premier jour des règles/ }).click()
+  const picker = page.getByRole('table', { name: /Calendrier de saisie pour/ })
+  const dateLabel = formatDate(startDate)
+  const dateName = new RegExp(`^${dateLabel}(?:, sélectionnée)?$`)
+  let attempts = 0
+  while ((await picker.getByRole('button', { name: dateName }).count()) === 0 && attempts < 36) {
+    await page.getByRole('button', { name: 'Mois précédent' }).click()
+    attempts += 1
+  }
+  await picker.getByRole('button', { name: dateName }).click()
+  await page.getByRole('button', { name: `Enregistrer le début du ${dateLabel}` }).click()
+}
+
 async function recordStart(page: Page, startDate: string) {
-  await page.getByLabel('Premier jour des règles').fill(startDate)
-  await page.getByRole('button', { name: 'Enregistrer le début' }).click()
+  await selectEntryDate(page, startDate)
   await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
 }
 
@@ -18,24 +37,27 @@ test('enregistre localement un début et le retrouve après rechargement dans le
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
   await page.goto('/')
 
-  const dateInput = page.getByLabel('Premier jour des règles')
-  await expect(dateInput).toHaveValue('2025-03-20')
+  const dateTrigger = page.getByRole('button', { name: /Premier jour des règles.*20 mars 2025/ })
+  await expect(dateTrigger).toBeVisible()
   const firstUseAccessibility = await new AxeBuilder({ page }).analyze()
   expect(firstUseAccessibility.violations).toEqual([])
   await page.keyboard.press('Tab')
   await expect(page.getByRole('link', { name: 'Aller au contenu' })).toBeFocused()
   await page.keyboard.press('Tab')
-  await expect(dateInput).toBeFocused()
-  await dateInput.fill('2025-03-12')
-  await dateInput.press('Enter')
+  await expect(page.getByRole('button', { name: 'Passer au thème sombre' })).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(dateTrigger).toBeFocused()
+  await selectEntryDate(page, '2025-03-12')
   await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
   await expect(page.getByText('12 mars 2025')).toHaveAttribute('datetime', '2025-03-12')
 
   await page.reload()
   await expect(page.getByText('12 mars 2025')).toHaveAttribute('datetime', '2025-03-12')
-  await dateInput.fill('2025-03-12')
-  await page.getByRole('button', { name: 'Enregistrer le début' }).click()
-  await expect(dateInput).toHaveAttribute('aria-invalid', 'true')
+  await selectEntryDate(page, '2025-03-12')
+  await expect(page.getByRole('button', { name: /Premier jour des règles.*12 mars 2025/ })).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  )
   await expect(page.getByRole('alert')).toContainText('Un début est déjà enregistré pour cette date.')
   const duplicateAccessibility = await new AxeBuilder({ page }).analyze()
   expect(duplicateAccessibility.violations).toEqual([])

@@ -23,6 +23,9 @@ Aussi, en parcourant les papiers scientifiques, il semblerait qu'il y ait largem
 ## TODO
 - ajouter une explication des trois phases selon les données renseignées : Proposition : sous 3 intervalles, aucune estimation; entre 3 et 5, médiane de tous les intervalles disponibles, projetée depuis le dernier début, avec confiance faible; à partir de 6, médiane des 6 intervalles les plus récents et plage min–max de ces mêmes intervalles, projetées depuis le dernier début. Aucun intervalle atypique n’est supprimé ni détecté automatiquement.
 - ajouter les periodes d'ovulation et de fertilité
+- plus largement, toutes les phases (sous forme d'estimations, cela me semble plus simple)
+- optionnelement enlever la possibilité de sélectionner plusieurs dates de début à la fois
+- Améliorer la méthode de stockage
 ## Sources
 
 [1]<https://pmc.ncbi.nlm.nih.gov/articles/PMC8504278/>

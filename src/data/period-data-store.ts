@@ -25,6 +25,7 @@ class PeriodDatabase extends Dexie {
 
 export interface PeriodDataStore {
   addPeriod(input: NewPeriod): Promise<Period>
+  addPeriods(inputs: NewPeriod[]): Promise<Period[]>
   deletePeriod(id: string): Promise<boolean>
   getPeriod(id: string): Promise<Period | undefined>
   getPeriods(): Promise<Period[]>
@@ -84,6 +85,35 @@ export function createPeriodDataStore(databaseName = 'PeriodPeriods'): PeriodDat
 
         await database.periods.add(period)
         return period
+      })
+    },
+
+    async addPeriods(inputs) {
+      const fields = inputs.map(copyValidatedNewPeriod)
+      const seenStarts = new Set<string>()
+      for (const { startDate } of fields) {
+        if (seenStarts.has(startDate)) throw new DuplicatePeriodStartError(startDate)
+        seenStarts.add(startDate)
+      }
+
+      if (fields.length === 0) return []
+
+      const now = new Date().toISOString()
+      const periods: Period[] = fields.map((periodFields) => ({
+        ...periodFields,
+        id: crypto.randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+      }))
+
+      return database.transaction('rw', database.periods, async () => {
+        for (const period of periods) {
+          const duplicate = await database.periods.where('startDate').equals(period.startDate).first()
+          if (duplicate) throw new DuplicatePeriodStartError(period.startDate)
+        }
+
+        await database.periods.bulkAdd(periods)
+        return periods.sort((left, right) => left.startDate.localeCompare(right.startDate))
       })
     },
 

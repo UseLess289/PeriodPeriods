@@ -1,12 +1,36 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+
+async function importStartDates(page: Page, startDates: string[]) {
+  const createdAt = '2025-01-01T00:00:00.000Z'
+  const backup = {
+    version: 1,
+    periods: startDates.map((startDate, index) => ({
+      id: `seed-${index + 1}`,
+      startDate,
+      createdAt,
+      updatedAt: createdAt,
+    })),
+    settings: { forecastMethod: 'median-6', firstDayOfWeek: 1 },
+  }
+  await page.getByRole('button', { name: 'Réglages' }).click()
+  await page.locator('#period-backup-file').setInputFiles({
+    name: 'seed.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(backup)),
+  })
+  await expect(page.getByRole('heading', { name: 'Aperçu de la sauvegarde' })).toBeVisible()
+  await page.getByRole('button', { name: 'Remplacer les données actuelles' }).click()
+  await expect(page.locator('#backup-import-status')).toContainText('Sauvegarde importée.')
+  await page.getByRole('button', { name: 'Accueil' }).click()
+}
 
 test('présente l’historique complet et explique la médiane sur un petit écran', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-06-30T12:00:00.000Z') })
   await page.goto('/')
 
-  const dateInput = page.getByLabel('Premier jour des règles')
-  for (const startDate of [
+  await importStartDates(page, [
     '2025-01-01',
     '2025-01-29',
     '2025-02-26',
@@ -15,11 +39,7 @@ test('présente l’historique complet et explique la médiane sur un petit écr
     '2025-05-24',
     '2025-06-22',
     '2025-06-30',
-  ]) {
-    await dateInput.fill(startDate)
-    await page.getByRole('button', { name: 'Enregistrer le début' }).click()
-    await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
-  }
+  ])
 
   const history = page.getByRole('list', { name: 'Intervalles entre les débuts enregistrés' })
   await expect(history.getByRole('listitem')).toHaveCount(7)
@@ -72,16 +92,11 @@ test('garde un historique long utilisable sans débordement sur iPhone étroit',
   await page.clock.install({ time: new Date('2025-06-30T12:00:00.000Z') })
   await page.goto('/')
 
-  const dateInput = page.getByLabel('Premier jour des règles')
   const starts = Array.from({ length: 41 }, (_, index) => {
     const daysBeforeToday = (40 - index) * 28
     return new Date(Date.UTC(2025, 5, 30 - daysBeforeToday)).toISOString().slice(0, 10)
   })
-  for (const startDate of starts) {
-    await dateInput.fill(startDate)
-    await page.getByRole('button', { name: 'Enregistrer le début' }).click()
-    await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
-  }
+  await importStartDates(page, starts)
 
   await page.setViewportSize({ width: 320, height: 812 })
   const intervals = page.getByRole('list', { name: 'Intervalles entre les débuts enregistrés' })
@@ -99,8 +114,14 @@ test('garde un historique long utilisable sans débordement sur iPhone étroit',
 test('distingue un début enregistré qui devient une date à venir', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-07-01T12:00:00.000Z') })
   await page.goto('/')
-  await page.getByLabel('Premier jour des règles').fill('2025-07-01')
-  await page.getByRole('button', { name: 'Enregistrer le début' }).click()
+  await page.getByRole('button', { name: /Premier jour des règles/ }).click()
+  await page
+    .getByRole('table', { name: /Calendrier de saisie pour juillet 2025/i })
+    .getByRole('button', {
+      name: '1 juillet 2025, sélectionnée',
+    })
+    .click()
+  await page.getByRole('button', { name: 'Enregistrer le début du 1 juillet 2025' }).click()
   await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
 
   await page.clock.setFixedTime(new Date('2025-06-30T12:00:00.000Z'))
