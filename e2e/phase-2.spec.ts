@@ -1,31 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
-
-function formatDate(date: string) {
-  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'UTC' }).format(
-    new Date(`${date}T00:00:00.000Z`),
-  )
-}
-
-async function selectEntryDate(page: Page, startDate: string) {
-  await page.getByRole('button', { name: /Premier jour des règles/ }).click()
-  const picker = page.getByRole('table', { name: /Calendrier de saisie pour/ })
-  const dateLabel = formatDate(startDate)
-  const dateName = new RegExp(`^${dateLabel}(?:, sélectionnée)?$`)
-  let attempts = 0
-  while ((await picker.getByRole('button', { name: dateName }).count()) === 0 && attempts < 36) {
-    await page.getByRole('button', { name: 'Mois précédent' }).click()
-    attempts += 1
-  }
-  await picker.getByRole('button', { name: dateName }).click()
-  await page.getByRole('button', { name: `Enregistrer le début du ${dateLabel}` }).click()
-}
-
-async function recordStart(page: Page, startDate: string) {
-  await selectEntryDate(page, startDate)
-  await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
-}
+import { recordStart } from './record-start'
 
 test('enregistre localement un début et le retrouve après rechargement dans le calendrier', async ({ page }) => {
   const externalRequests: string[] = []
@@ -37,8 +12,8 @@ test('enregistre localement un début et le retrouve après rechargement dans le
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
   await page.goto('/')
 
-  const dateTrigger = page.getByRole('button', { name: /Premier jour des règles.*20 mars 2025/ })
-  await expect(dateTrigger).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ajouter un événement' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Enregistrer un début de règles' })).toHaveCount(0)
   const firstUseAccessibility = await new AxeBuilder({ page }).analyze()
   expect(firstUseAccessibility.violations).toEqual([])
   await page.keyboard.press('Tab')
@@ -46,22 +21,12 @@ test('enregistre localement un début et le retrouve après rechargement dans le
   await page.keyboard.press('Tab')
   await expect(page.getByRole('button', { name: 'Passer au thème sombre' })).toBeFocused()
   await page.keyboard.press('Tab')
-  await expect(dateTrigger).toBeFocused()
-  await selectEntryDate(page, '2025-03-12')
-  await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
+  await expect(page.getByRole('button', { name: 'Mois précédent' })).toBeFocused()
+  await recordStart(page, '2025-03-12')
   await expect(page.getByText('12 mars 2025')).toHaveAttribute('datetime', '2025-03-12')
 
   await page.reload()
   await expect(page.getByText('12 mars 2025')).toHaveAttribute('datetime', '2025-03-12')
-  await selectEntryDate(page, '2025-03-12')
-  await expect(page.getByRole('button', { name: /Premier jour des règles.*12 mars 2025/ })).toHaveAttribute(
-    'aria-invalid',
-    'true',
-  )
-  await expect(page.getByRole('alert')).toContainText('Un début est déjà enregistré pour cette date.')
-  const duplicateAccessibility = await new AxeBuilder({ page }).analyze()
-  expect(duplicateAccessibility.violations).toEqual([])
-  await page.getByRole('button', { name: 'Calendrier', exact: true }).click()
   const calendar = page.getByRole('table', { name: 'Calendrier pour mars 2025' })
   await expect(calendar.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
   const pageWidth = await page.evaluate(() => ({
@@ -74,7 +39,7 @@ test('enregistre localement un début et le retrouve après rechargement dans le
   expect(externalRequests).toEqual([])
 })
 
-test('passe de données insuffisantes à la médiane et sa plage sur le calendrier', async ({ page }) => {
+test('passe de données insuffisantes à la médiane et sa marge sur le calendrier', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-06-28T12:00:00.000Z') })
   await page.goto('/')
 
@@ -84,12 +49,11 @@ test('passe de données insuffisantes à la médiane et sa plage sur le calendri
 
   await recordStart(page, '2025-03-27')
   await expect(page.getByRole('heading', { name: 'Prochain début estimé' })).toBeVisible()
-  await expect(page.getByText('24 avril 2025')).toHaveAttribute('datetime', '2025-04-24')
+  await expect(page.getByText('24 avril', { exact: true })).toHaveAttribute('datetime', '2025-04-24')
   for (const start of ['2025-04-26', '2025-05-27', '2025-06-28']) await recordStart(page, start)
 
-  await expect(page.getByText('28 juillet 2025')).toHaveAttribute('datetime', '2025-07-28')
-  await expect(page.getByText('26 au 30 juillet 2025')).toBeVisible()
-  await page.getByRole('button', { name: 'Calendrier', exact: true }).click()
+  await expect(page.getByText('28 juillet', { exact: true })).toHaveAttribute('datetime', '2025-07-28')
+  await expect(page.locator('.forecast-estimate')).toContainText('± 2 j')
   await page.getByRole('button', { name: 'Mois suivant' }).click()
   const calendar = page.getByRole('table', { name: 'Calendrier pour juillet 2025' })
   await expect(calendar.getByLabel('Borne basse de la plage estimée le 26 juillet 2025')).toBeVisible()

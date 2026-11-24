@@ -2,8 +2,12 @@ import Dexie, { type Table } from 'dexie'
 import { copyValidatedAppSettings, copyValidatedNewPeriod, DEFAULT_SETTINGS } from '../domain/periods'
 import type { AppSettings, NewPeriod, Period, PeriodChanges } from '../domain/periods'
 import { parsePeriodBackup, serializePeriodBackup } from './period-backup'
+import { parsePeriodCsv } from './period-csv'
+import { parseFloExport } from './flo-import'
 
 export { InvalidBackupError } from './period-backup'
+export { InvalidPeriodCsvError } from './period-csv'
+export { InvalidFloExportError } from './flo-import'
 
 interface SettingsRow {
   key: 'app'
@@ -23,6 +27,11 @@ class PeriodDatabase extends Dexie {
   }
 }
 
+export type PeriodCsvPreview = {
+  readonly periods: readonly NewPeriod[]
+  readonly conflictingStartDates: readonly string[]
+}
+
 export interface PeriodDataStore {
   addPeriod(input: NewPeriod): Promise<Period>
   addPeriods(inputs: NewPeriod[]): Promise<Period[]>
@@ -33,6 +42,10 @@ export interface PeriodDataStore {
   saveSettings(settings: AppSettings): Promise<AppSettings>
   exportBackup(): Promise<string>
   importBackup(json: string): Promise<void>
+  previewPeriodCsv(csv: string): Promise<PeriodCsvPreview>
+  importPeriodCsv(csv: string): Promise<Period[]>
+  previewFloExport(json: string): Promise<PeriodCsvPreview>
+  importFloExport(json: string): Promise<Period[]>
   updatePeriod(id: string, changes: PeriodChanges): Promise<Period>
   close(): void
 }
@@ -67,7 +80,7 @@ async function readSettings(database: PeriodDatabase): Promise<AppSettings> {
 export function createPeriodDataStore(databaseName = 'PeriodPeriods'): PeriodDataStore {
   const database = new PeriodDatabase(databaseName)
 
-  return {
+  const store: PeriodDataStore = {
     async addPeriod(input) {
       const fields = copyValidatedNewPeriod(input)
 
@@ -162,6 +175,32 @@ export function createPeriodDataStore(databaseName = 'PeriodPeriods'): PeriodDat
       })
     },
 
+    async previewPeriodCsv(csv) {
+      const periods = parsePeriodCsv(csv)
+      const conflicts = await database.periods
+        .where('startDate')
+        .anyOf(periods.map(({ startDate }) => startDate))
+        .toArray()
+      return { periods, conflictingStartDates: conflicts.map(({ startDate }) => startDate) }
+    },
+
+    async importPeriodCsv(csv) {
+      return store.addPeriods(parsePeriodCsv(csv))
+    },
+
+    async previewFloExport(json) {
+      const periods = parseFloExport(json)
+      const conflicts = await database.periods
+        .where('startDate')
+        .anyOf(periods.map(({ startDate }) => startDate))
+        .toArray()
+      return { periods, conflictingStartDates: conflicts.map(({ startDate }) => startDate) }
+    },
+
+    async importFloExport(json) {
+      return store.addPeriods(parseFloExport(json))
+    },
+
     async updatePeriod(id, changes) {
       try {
         return await database.transaction('rw', database.periods, async () => {
@@ -190,4 +229,6 @@ export function createPeriodDataStore(databaseName = 'PeriodPeriods'): PeriodDat
       database.close()
     },
   }
+
+  return store
 }

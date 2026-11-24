@@ -1,22 +1,26 @@
-import { CalendarDays, Home, Moon, Settings, Sun } from 'lucide-react'
+import { ChartNoAxesCombined, Home, Moon, Plus, Settings, Sun } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPeriodDataStore, DuplicatePeriodStartError } from './data/period-data-store'
 import type { PeriodDataStore } from './data/period-data-store'
 import { estimateNextPeriod } from './domain/forecast/estimate-next-period'
-import type { AppSettings, CivilDate, Period } from './domain/periods'
+import type { AppSettings, CivilDate, NewPeriod, Period } from './domain/periods'
 import { PeriodCalendarView } from './features/calendar/PeriodCalendarView'
-import { PeriodEntryView, type PeriodSaveError } from './features/periods/PeriodEntryView'
+import { PeriodEntryView } from './features/periods/PeriodEntryView'
+import { PeriodEventDialog } from './features/periods/PeriodEventDialog'
 import { BackupSettingsView } from './features/settings/BackupSettingsView'
+import { StatsView } from './features/stats/StatsView'
 
-type View = 'home' | 'calendar' | 'settings'
+type View = 'home' | 'stats' | 'settings'
 type Theme = 'light' | 'dark'
+type Locale = 'fr' | 'en'
 
 const THEME_STORAGE_KEY = 'periodperiods-theme'
+const LOCALE_STORAGE_KEY = 'periodperiods-locale'
 
 const views: Record<View, { label: string; title: string }> = {
   home: { label: 'Accueil', title: 'Suivi des règles et du cycle' },
-  calendar: { label: 'Calendrier', title: 'Calendrier' },
+  stats: { label: 'Statistiques', title: 'Statistiques' },
   settings: { label: 'Réglages', title: 'Réglages' },
 }
 
@@ -25,7 +29,7 @@ const defaultStore = createPeriodDataStore()
 function getViewFromLocation(): View {
   if (typeof window === 'undefined') return 'home'
   const view = new URLSearchParams(window.location.search).get('view')
-  return view === 'calendar' || view === 'settings' ? view : 'home'
+  return view === 'stats' || view === 'settings' ? view : 'home'
 }
 
 function getStoredTheme(): Theme {
@@ -33,6 +37,14 @@ function getStoredTheme(): Theme {
     return window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light'
   } catch {
     return 'light'
+  }
+}
+
+function getStoredLocale(): Locale {
+  try {
+    return window.localStorage.getItem(LOCALE_STORAGE_KEY) === 'en' ? 'en' : 'fr'
+  } catch {
+    return 'fr'
   }
 }
 
@@ -51,13 +63,14 @@ function getLocalCivilDate(date = new Date()): CivilDate {
 function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
   const [activeView, setActiveView] = useState<View>(getViewFromLocation)
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
+  const [locale, setLocale] = useState<Locale>(getStoredLocale)
   const [periods, setPeriods] = useState<Period[] | null>(null)
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [saveError, setSaveError] = useState<PeriodSaveError | null>(null)
+  const [eventDialogOpen, setEventDialogOpen] = useState(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const previousViewRef = useRef(activeView)
 
@@ -73,6 +86,24 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
       // The appearance still changes when local storage is unavailable.
     }
   }, [theme])
+
+  useEffect(() => {
+    document.documentElement.lang = locale
+    document.title = locale === 'en' ? 'PeriodPeriods — cycle tracker' : 'PeriodPeriods — suivi des règles et du cycle'
+    document
+      .querySelector<HTMLMetaElement>('meta[name="description"]')
+      ?.setAttribute(
+        'content',
+        locale === 'en'
+          ? 'Track your cycle locally, without an account or synchronization.'
+          : 'Suivi des règles et du cycle, conçu pour garder les données sur cet appareil.',
+      )
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, locale)
+    } catch {
+      // The language remains active for this session.
+    }
+  }, [locale])
 
   useEffect(() => {
     let isCurrent = true
@@ -121,29 +152,28 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
     [activeView],
   )
 
-  async function savePeriod(startDate: CivilDate) {
-    setSaveMessage(null)
-    setSaveError(null)
-
-    if (startDate > today) {
-      setSaveError({ message: 'La date ne peut pas être dans le futur.', invalidDate: true })
-      return false
+  async function saveEvent(input: NewPeriod): Promise<string | null> {
+    if (input.startDate > today || (input.endDate && input.endDate > today)) {
+      return 'Une date future ne peut pas être enregistrée.'
     }
-
     try {
-      const saved = await store.addPeriod({ startDate })
-      setPeriods((current) =>
-        [...(current ?? []), saved].sort((left, right) => left.startDate.localeCompare(right.startDate)),
-      )
-      setSaveMessage('Date enregistrée sur cet appareil.')
-      return true
-    } catch (error) {
-      setSaveError(
-        error instanceof DuplicatePeriodStartError
-          ? { message: 'Un début est déjà enregistré pour cette date.', invalidDate: true }
-          : { message: 'L’enregistrement a échoué. Ta date est conservée; réessaie.', invalidDate: false },
-      )
-      return false
+      const existing = periods?.find((item) => item.startDate === input.startDate)
+      if (existing) {
+        const updated = await store.updatePeriod(existing.id, {
+          endDate: input.endDate,
+          symptoms: input.symptoms,
+        })
+        setPeriods((current) => current?.map((item) => (item.id === updated.id ? updated : item)) ?? [])
+      } else {
+        const saved = await store.addPeriod(input)
+        setPeriods((current) =>
+          [...(current ?? []), saved].sort((left, right) => left.startDate.localeCompare(right.startDate)),
+        )
+      }
+      setSaveMessage(locale === 'en' ? 'Period saved on this device.' : 'Période enregistrée sur cet appareil.')
+      return null
+    } catch {
+      return 'L’enregistrement a échoué. Vérifie les données et réessaie.'
     }
   }
 
@@ -172,34 +202,60 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
     setSettings(loadedSettings)
     setLoadError(false)
     setSaveMessage(null)
-    setSaveError(null)
+  }
+
+  async function changeFirstDayOfWeek(firstDayOfWeek: 0 | 1) {
+    if (!settings) return
+    try {
+      const saved = await store.saveSettings({ ...settings, firstDayOfWeek })
+      setSettings(saved)
+    } catch {
+      setSaveMessage(locale === 'en' ? 'The setting could not be saved.' : 'Le réglage n’a pas pu être enregistré.')
+    }
   }
 
   const isDataReady = periods !== null && settings !== null
   const estimate = isDataReady ? estimateNextPeriod(periods, today) : null
   const nextTheme = theme === 'light' ? 'dark' : 'light'
-  const themeActionLabel = nextTheme === 'dark' ? 'Passer au thème sombre' : 'Passer au thème clair'
+  const themeActionLabel =
+    nextTheme === 'dark'
+      ? locale === 'en'
+        ? 'Switch to dark theme'
+        : 'Passer au thème sombre'
+      : locale === 'en'
+        ? 'Switch to light theme'
+        : 'Passer au thème clair'
 
   function renderPageContent(view: View, isActive: boolean) {
     return (
       <>
         <div className="view-heading">
-          <p className="eyebrow">{views[view].label}</p>
+          <p className="eyebrow">
+            {locale === 'en' ? { home: 'Home', stats: 'Statistics', settings: 'Settings' }[view] : views[view].label}
+          </p>
           <h1 ref={isActive ? headingRef : undefined} tabIndex={-1}>
-            {views[view].title}
+            {locale === 'en'
+              ? { home: 'Cycle and period tracking', stats: 'Statistics', settings: 'Settings' }[view]
+              : views[view].title}
           </h1>
         </div>
 
         {isActive && isLoading && (
           <p className="data-state" role="status">
-            Chargement de tes dates…
+            {locale === 'en' ? 'Loading your dates…' : 'Chargement de tes dates…'}
           </p>
         )}
 
         {isActive && !isLoading && loadError && (
           <section className="data-state data-state-error" aria-labelledby="load-error-title" role="alert">
-            <h2 id="load-error-title">Impossible de charger tes dates.</h2>
-            <p>L’application ne peut pas lire les données de cet appareil. Tu peux réessayer.</p>
+            <h2 id="load-error-title">
+              {locale === 'en' ? 'Could not load your dates.' : 'Impossible de charger tes dates.'}
+            </h2>
+            <p>
+              {locale === 'en'
+                ? 'The data on this device could not be read. Try again.'
+                : 'L’application ne peut pas lire les données de cet appareil. Tu peux réessayer.'}
+            </p>
             <button
               className="secondary-button"
               type="button"
@@ -209,7 +265,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
                 setLoadAttempt((attempt) => attempt + 1)
               }}
             >
-              Réessayer
+              {locale === 'en' ? 'Try again' : 'Réessayer'}
             </button>
           </section>
         )}
@@ -219,25 +275,52 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
             periods={periods}
             estimate={estimate!}
             today={today}
-            firstDayOfWeek={settings.firstDayOfWeek}
             saveMessage={saveMessage}
-            saveError={saveError}
-            onClearSaveError={() => setSaveError(null)}
-            onSave={savePeriod}
-            onOpenCalendar={() => navigateToView('calendar')}
+            onOpenCalendar={() => document.getElementById('calendar-month-title')?.scrollIntoView()}
+            calendar={
+              <PeriodCalendarView
+                periods={periods}
+                estimate={estimate!}
+                firstDayOfWeek={settings.firstDayOfWeek}
+                today={today}
+                onSaveDates={savePeriodStarts}
+                locale={locale}
+              />
+            }
+            locale={locale}
           />
         )}
-        {!isLoading && !loadError && periods !== null && settings !== null && view === 'calendar' && (
-          <PeriodCalendarView
-            periods={periods}
-            estimate={estimate!}
-            firstDayOfWeek={settings.firstDayOfWeek}
-            today={today}
-            onSaveDates={savePeriodStarts}
-          />
+        {!isLoading && !loadError && periods !== null && view === 'stats' && (
+          <StatsView periods={periods} today={today} locale={locale} />
         )}
         {!isLoading && !loadError && periods !== null && settings !== null && view === 'settings' && (
-          <BackupSettingsView store={store} onImported={refreshImportedData} />
+          <>
+            <section className="settings-preferences" aria-labelledby="preferences-title">
+              <h2 id="preferences-title">{locale === 'en' ? 'Preferences' : 'Préférences'}</h2>
+              <label htmlFor="locale-setting">{locale === 'en' ? 'Language' : 'Langue'}</label>
+              <select
+                id="locale-setting"
+                value={locale}
+                onChange={(event) => setLocale(event.target.value === 'en' ? 'en' : 'fr')}
+              >
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
+              <label htmlFor="week-setting">
+                {locale === 'en' ? 'First day of the week' : 'Premier jour de la semaine'}
+              </label>
+              <select
+                id="week-setting"
+                value={settings.firstDayOfWeek}
+                onChange={(event) => void changeFirstDayOfWeek(event.target.value === '0' ? 0 : 1)}
+              >
+                <option value="1">{locale === 'en' ? 'Monday' : 'Lundi'}</option>
+                <option value="0">{locale === 'en' ? 'Sunday' : 'Dimanche'}</option>
+              </select>
+              <p role="status">{saveMessage}</p>
+            </section>
+            <BackupSettingsView store={store} onImported={refreshImportedData} locale={locale} />
+          </>
         )}
       </>
     )
@@ -246,19 +329,11 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
-        Aller au contenu
+        {locale === 'en' ? 'Skip to content' : 'Aller au contenu'}
       </a>
 
       <header className="app-header">
-        <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">
-            P
-          </div>
-          <div className="brand-copy">
-            <p className="brand-name">PeriodPeriods</p>
-            <p className="brand-kicker">Suivi des règles, sans compte.</p>
-          </div>
-        </div>
+        <p className="brand-name">PeriodPeriods</p>
         <button
           className="theme-toggle"
           type="button"
@@ -277,23 +352,44 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
         </main>
       </div>
 
-      <nav className="bottom-nav" aria-label="Navigation principale">
+      {!isLoading && !loadError && periods !== null && (
+        <>
+          <button
+            className="floating-add"
+            type="button"
+            aria-label={locale === 'en' ? 'Add an event' : 'Ajouter un événement'}
+            onClick={() => setEventDialogOpen(true)}
+          >
+            <Plus size={24} aria-hidden="true" />
+            <span>{locale === 'en' ? 'Add' : 'Ajouter'}</span>
+          </button>
+          <PeriodEventDialog
+            open={eventDialogOpen}
+            periods={periods}
+            today={today}
+            onClose={() => setEventDialogOpen(false)}
+            onSave={saveEvent}
+            locale={locale}
+          />
+        </>
+      )}
+      <nav className="bottom-nav" aria-label={locale === 'en' ? 'Main navigation' : 'Navigation principale'}>
         <NavButton
           active={activeView === 'home'}
           icon={<Home size={21} aria-hidden="true" />}
-          label="Accueil"
+          label={locale === 'en' ? 'Home' : 'Accueil'}
           onClick={() => navigateToView('home')}
         />
         <NavButton
-          active={activeView === 'calendar'}
-          icon={<CalendarDays size={21} aria-hidden="true" />}
-          label="Calendrier"
-          onClick={() => navigateToView('calendar')}
+          active={activeView === 'stats'}
+          icon={<ChartNoAxesCombined size={21} aria-hidden="true" />}
+          label={locale === 'en' ? 'Statistics' : 'Statistiques'}
+          onClick={() => navigateToView('stats')}
         />
         <NavButton
           active={activeView === 'settings'}
           icon={<Settings size={21} aria-hidden="true" />}
-          label="Réglages"
+          label={locale === 'en' ? 'Settings' : 'Réglages'}
           onClick={() => navigateToView('settings')}
         />
       </nav>

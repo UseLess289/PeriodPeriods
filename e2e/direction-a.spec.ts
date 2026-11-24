@@ -1,27 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
-
-function formatDate(date: string) {
-  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'UTC' }).format(
-    new Date(`${date}T00:00:00.000Z`),
-  )
-}
-
-async function recordStart(page: Page, startDate: string) {
-  await page.getByRole('button', { name: /Premier jour des règles/ }).click()
-  const picker = page.getByRole('table', { name: /Calendrier de saisie pour/ })
-  const dateLabel = formatDate(startDate)
-  const dateName = new RegExp(`^${dateLabel}(?:, sélectionnée)?$`)
-  let attempts = 0
-  while ((await picker.getByRole('button', { name: dateName }).count()) === 0 && attempts < 48) {
-    await page.getByRole('button', { name: 'Mois précédent' }).click()
-    attempts += 1
-  }
-  await picker.getByRole('button', { name: dateName }).click()
-  await page.getByRole('button', { name: `Enregistrer le début du ${dateLabel}` }).click()
-  await expect(page.locator('.form-feedback-success')).toContainText('Date enregistrée sur cet appareil.')
-}
+import { recordStart } from './record-start'
 
 test('keeps estimate context, logging, and calendar markers clear on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -34,13 +13,15 @@ test('keeps estimate context, logging, and calendar markers clear on mobile', as
     await recordStart(page, startDate)
   }
 
-  const disclaimer = await page.locator('.forecast-disclaimer').boundingBox()
-  const saveButton = await page.getByRole('button', { name: 'Choisir une date', exact: true }).boundingBox()
+  const forecast = await page.locator('.forecast-section').boundingBox()
+  const saveButton = await page.getByRole('button', { name: 'Ajouter un événement' }).boundingBox()
   const bottomNavigation = await page.locator('.bottom-nav').boundingBox()
-  expect(disclaimer).not.toBeNull()
+  expect(forecast).not.toBeNull()
+  await expect(page.locator('.forecast-estimate')).toContainText('± 1 j')
+  await expect(page.locator('.forecast-disclaimer')).toHaveCount(0)
   expect(saveButton).not.toBeNull()
   expect(bottomNavigation).not.toBeNull()
-  expect(disclaimer!.y + disclaimer!.height).toBeLessThan(bottomNavigation!.y)
+  expect(forecast!.y + forecast!.height).toBeLessThan(bottomNavigation!.y)
   expect(saveButton!.y + saveButton!.height).toBeLessThan(bottomNavigation!.y)
 
   const lowConfidenceAccessibility = await new AxeBuilder({ page }).analyze()
@@ -50,7 +31,6 @@ test('keeps estimate context, logging, and calendar markers clear on mobile', as
     await recordStart(page, startDate)
   }
 
-  await page.getByRole('button', { name: 'Calendrier', exact: true }).click()
   await expect(page.locator('.calendar-legend')).toContainText('Aujourd’hui')
   await page.getByRole('button', { name: 'Mois suivant' }).click()
   const calendar = page.getByRole('table', { name: 'Calendrier pour avril 2025' })

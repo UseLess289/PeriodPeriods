@@ -4,9 +4,10 @@ import type { KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as Reac
 import { addCivilDays, buildCalendarMonth, shiftCalendarMonth } from '../../domain/dates'
 import type { PeriodStartEstimate } from '../../domain/forecast/estimate-next-period'
 import type { CivilDate, Period } from '../../domain/periods'
-import { formatCivilDate } from '../shared/format-civil-date'
+import { formatCivilDate, formatCivilMonth, getCalendarWeekdays, type Locale } from '../shared/format-civil-date'
 
 type PeriodCalendarViewProps = {
+  readonly locale?: Locale
   periods: Period[]
   estimate: PeriodStartEstimate
   firstDayOfWeek: 0 | 1
@@ -23,14 +24,6 @@ type MonthSwipeGesture = {
   velocityX: number
   isHorizontal: boolean
   startedOnDateChoice: boolean
-}
-
-function getMonthTitle(monthStart: CivilDate): string {
-  return new Intl.DateTimeFormat('fr-FR', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${monthStart}T00:00:00.000Z`))
 }
 
 function getMonthDayCount(monthStart: CivilDate): number {
@@ -51,37 +44,70 @@ function getFirstSelectableDate(
   )
 }
 
-export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, onSaveDates }: PeriodCalendarViewProps) {
+// The app's save callback still returns these French messages.
+const englishSaveErrors = new Map([
+  [
+    'Les dates futures ne peuvent pas être enregistrées. Aucune date n’a été ajoutée.',
+    'Future dates cannot be saved. No dates were added.',
+  ],
+  [
+    'Au moins un de ces débuts est déjà enregistré. Aucune date n’a été ajoutée; vérifie la sélection.',
+    'At least one period start is already recorded. No dates were added. Check your selection.',
+  ],
+  [
+    'L’enregistrement a échoué. Aucune date n’a été ajoutée; tes sélections sont conservées. Réessaie.',
+    'Could not save. No dates were added, and your selections are still in place. Try again.',
+  ],
+])
+
+export function PeriodCalendarView({
+  periods,
+  estimate,
+  firstDayOfWeek,
+  today,
+  onSaveDates,
+  locale = 'fr',
+}: PeriodCalendarViewProps) {
+  const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
   const [monthStart, setMonthStart] = useState<CivilDate>(`${today.slice(0, 7)}-01`)
   const [isAdding, setIsAdding] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [selectedDates, setSelectedDates] = useState<Set<CivilDate>>(() => new Set())
   const [focusedDate, setFocusedDate] = useState<CivilDate | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveMessage, setSaveMessage] = useState('')
+  const [savedCount, setSavedCount] = useState(0)
   const dateButtons = useRef(new Map<CivilDate, HTMLButtonElement>())
   const addModeButtonRef = useRef<HTMLButtonElement>(null)
   const pendingFocusDate = useRef<CivilDate | null>(null)
   const shouldReturnFocusToAddButton = useRef(false)
   const monthSwipeGestureRef = useRef<MonthSwipeGesture | null>(null)
   const suppressDateChoiceClickRef = useRef(false)
-  const monthTitle = getMonthTitle(monthStart)
-  const formattedMonthTitle = `${monthTitle[0].toLocaleUpperCase('fr-FR')}${monthTitle.slice(1)}`
+  const monthTitle = formatCivilMonth(monthStart, locale)
+  const formattedMonthTitle = `${monthTitle[0].toLocaleUpperCase(locale)}${monthTitle.slice(1)}`
   const calendarDays = buildCalendarMonth(monthStart, firstDayOfWeek)
   const recordedStarts = new Set(periods.map(({ startDate }) => startDate))
   const monthPeriodStarts = new Set(
     periods.filter((period) => period.startDate.startsWith(monthStart.slice(0, 7))).map((period) => period.startDate),
   )
   const orderedSelection = [...selectedDates].sort()
-  const weekDays = Array.from({ length: 7 }, (_, index) => {
-    const weekday = (firstDayOfWeek + index) % 7
-    const date = new Date('2023-01-01T00:00:00.000Z')
-    date.setUTCDate(date.getUTCDate() + weekday)
-    return {
-      longName: new Intl.DateTimeFormat('fr-FR', { weekday: 'long', timeZone: 'UTC' }).format(date),
-      shortName: new Intl.DateTimeFormat('fr-FR', { weekday: 'short', timeZone: 'UTC' }).format(date),
-    }
-  })
+  const weekDays = getCalendarWeekdays(firstDayOfWeek, locale)
+  const count = orderedSelection.length
+  const selection = text(`${count} début${count === 1 ? '' : 's'}`, `${count} period start${count === 1 ? '' : 's'}`)
+  const monthNavigation = {
+    previous: text('Mois précédent', 'Previous month'),
+    next: text('Mois suivant', 'Next month'),
+  }
+  const todayLabel = text('Aujourd’hui', 'Today')
+  const recordedLabel = text('Début enregistré', 'Recorded period start')
+  const centerLabel = text('Date centrale estimée', 'Central estimate')
+  const addLabel = text('Ajouter plusieurs débuts', 'Add multiple period starts')
+  const saveMessage =
+    savedCount === 0
+      ? ''
+      : text(
+          `${savedCount} début${savedCount === 1 ? '' : 's'} enregistré${savedCount === 1 ? '' : 's'} sur cet appareil.`,
+          `${savedCount} period start${savedCount === 1 ? '' : 's'} saved on this device.`,
+        )
 
   useEffect(() => {
     if (!pendingFocusDate.current) return
@@ -98,7 +124,7 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
   function enterAddingMode() {
     setSelectedDates(new Set())
     setSaveError(null)
-    setSaveMessage('')
+    setSavedCount(0)
     const firstSelectableDate = getFirstSelectableDate(monthStart, firstDayOfWeek, recordedStarts, today)
     setFocusedDate(firstSelectableDate)
     pendingFocusDate.current = firstSelectableDate
@@ -210,12 +236,12 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
     suppressDateChoiceClickRef.current = false
   }
 
-  function leaveAddingMode(message = '') {
+  function leaveAddingMode(saved = 0) {
     setIsAdding(false)
     setSelectedDates(new Set())
     setFocusedDate(null)
     setSaveError(null)
-    setSaveMessage(message)
+    setSavedCount(saved)
     shouldReturnFocusToAddButton.current = true
   }
 
@@ -227,23 +253,21 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
       return next
     })
     setSaveError(null)
-    setSaveMessage('')
+    setSavedCount(0)
   }
 
   async function saveSelectedDates() {
     if (orderedSelection.length === 0 || isSaving) return
     setIsSaving(true)
     setSaveError(null)
-    setSaveMessage('')
+    setSavedCount(0)
     const error = await onSaveDates(orderedSelection)
     setIsSaving(false)
     if (error) {
       setSaveError(error)
       return
     }
-    leaveAddingMode(
-      `${orderedSelection.length} début${orderedSelection.length === 1 ? '' : 's'} enregistré${orderedSelection.length === 1 ? '' : 's'} sur cet appareil.`,
-    )
+    leaveAddingMode(count)
   }
 
   function focusSelectableDate(target: CivilDate, direction: -1 | 1) {
@@ -296,24 +320,37 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
   }
 
   return (
-    <section className="calendar-section" aria-labelledby="calendar-month-title">
+    <section className="calendar-section" lang={locale} aria-labelledby="calendar-month-title">
       <div className="calendar-heading">
         <div>
-          <p className="section-label">Dates enregistrées</p>
+          <p className="section-label">{text('Dates enregistrées', 'Recorded dates')}</p>
           <h2 id="calendar-month-title" aria-live="polite" aria-atomic="true">
             {formattedMonthTitle}
           </h2>
         </div>
         <div className="month-navigation">
           <button
+            className="secondary-button today-button"
+            type="button"
+            disabled={monthStart === `${today.slice(0, 7)}-01`}
+            onClick={() => setMonthStart(`${today.slice(0, 7)}-01`)}
+          >
+            {todayLabel}
+          </button>
+          <button
             className="month-nav-button"
             type="button"
-            aria-label="Mois précédent"
+            aria-label={monthNavigation.previous}
             onClick={() => changeMonth(-1)}
           >
             <ChevronLeft size={20} aria-hidden="true" />
           </button>
-          <button className="month-nav-button" type="button" aria-label="Mois suivant" onClick={() => changeMonth(1)}>
+          <button
+            className="month-nav-button"
+            type="button"
+            aria-label={monthNavigation.next}
+            onClick={() => changeMonth(1)}
+          >
             <ChevronRight size={20} aria-hidden="true" />
           </button>
         </div>
@@ -321,7 +358,7 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
 
       <table
         className="calendar-table"
-        aria-label={`Calendrier pour ${monthTitle}`}
+        aria-label={text(`Calendrier pour ${monthTitle}`, `Calendar for ${monthTitle}`)}
         onPointerDown={handleMonthPointerDown}
         onPointerMove={handleMonthPointerMove}
         onPointerUp={finishMonthSwipe}
@@ -355,23 +392,32 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
                 const isForecastUpperBound = estimate.kind === 'range' && day.date === estimate.latestStartDate
                 const dateDescriptions = [
                   ...(hasPeriodStart
-                    ? [isFutureStart ? 'Début enregistré pour une date à venir' : 'Début enregistré']
+                    ? [
+                        isFutureStart
+                          ? text('Début enregistré pour une date à venir', 'Recorded period start on a future date')
+                          : recordedLabel,
+                      ]
                     : []),
-                  ...(isForecastLowerBound ? ['Borne basse de la plage estimée'] : []),
-                  ...(isForecastUpperBound ? ['Borne haute de la plage estimée'] : []),
-                  ...(isForecastCenter ? ['Date centrale estimée'] : []),
+                  ...(isForecastLowerBound
+                    ? [text('Borne basse de la plage estimée', 'Earliest date in the estimated range')]
+                    : []),
+                  ...(isForecastUpperBound
+                    ? [text('Borne haute de la plage estimée', 'Latest date in the estimated range')]
+                    : []),
+                  ...(isForecastCenter ? [centerLabel] : []),
                   ...(isForecastRange && !isForecastCenter && !isForecastLowerBound && !isForecastUpperBound
-                    ? ['Dans la plage estimée']
+                    ? [text('Dans la plage estimée', 'Within the estimated range')]
                     : []),
                   ...(estimate.kind !== 'insufficient' && estimate.isPast && isForecastCenter
-                    ? ['Estimation passée']
+                    ? [text('Estimation passée', 'Past estimate')]
                     : []),
                 ]
                 const unavailableReason = hasPeriodStart
-                  ? 'début déjà enregistré, non sélectionnable'
+                  ? text('début déjà enregistré, non sélectionnable', 'period start already recorded, unavailable')
                   : isFuture
-                    ? 'date future, non sélectionnable'
+                    ? text('date future, non sélectionnable', 'future date, unavailable')
                     : ''
+                const dateLabel = day.inDisplayedMonth ? formatCivilDate(day.date, locale) : ''
 
                 return (
                   <td
@@ -400,7 +446,7 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
                             else dateButtons.current.delete(day.date)
                           }}
                           type="button"
-                          aria-label={`${formatCivilDate(day.date)}${isSelected ? ', sélectionnée' : ''}${unavailableReason ? `, ${unavailableReason}` : ''}`}
+                          aria-label={`${dateLabel}${isSelected ? text(', sélectionnée', ', selected') : ''}${unavailableReason ? `, ${unavailableReason}` : ''}`}
                           aria-pressed={isSelected}
                           disabled={Boolean(unavailableReason)}
                           tabIndex={focusedDate === day.date ? 0 : -1}
@@ -418,8 +464,10 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
                           aria-current={day.date === today ? 'date' : undefined}
                           aria-label={
                             dateDescriptions.length > 0
-                              ? `${dateDescriptions.join(' et ')} le ${formatCivilDate(day.date)}`
-                              : formatCivilDate(day.date)
+                              ? locale === 'en'
+                                ? `${dateLabel}: ${new Intl.ListFormat('en-US').format(dateDescriptions)}`
+                                : `${dateDescriptions.join(' et ')} le ${dateLabel}`
+                              : dateLabel
                           }
                         >
                           <span className="calendar-day-number">{dayNumber}</span>
@@ -440,70 +488,79 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
 
       {saveError && (
         <p className="field-error calendar-save-error" role="alert">
-          {saveError}
+          {locale === 'en' ? (englishSaveErrors.get(saveError) ?? saveError) : saveError}
         </p>
       )}
       <p className="form-feedback form-feedback-success" role="status" aria-live="polite" aria-atomic="true">
         {saveMessage}
       </p>
 
-      <ul className="calendar-legend" aria-label="Légende du calendrier">
+      <ul className="calendar-legend" aria-label={text('Légende du calendrier', 'Calendar legend')}>
         {today.slice(0, 7) === monthStart.slice(0, 7) && (
           <li>
             <span className="calendar-today-mark" aria-hidden="true" />
-            Aujourd’hui
+            {todayLabel}
           </li>
         )}
         <li>
           <span className="period-start-mark" aria-hidden="true" />
-          Début enregistré
+          {recordedLabel}
         </li>
         {estimate.kind === 'range' && (
           <>
             <li>
               <span className="forecast-range-mark" aria-hidden="true" />
-              Plage estimée
+              {text('Plage estimée', 'Estimated range')}
             </li>
             <li>
               <span className="forecast-bound-mark" aria-hidden="true" />
-              Bornes basse et haute
+              {text('Bornes basse et haute', 'Earliest and latest dates')}
             </li>
           </>
         )}
         {estimate.kind !== 'insufficient' && (
           <li>
             <span className="forecast-center-mark" aria-hidden="true" />
-            Date centrale estimée
+            {centerLabel}
           </li>
         )}
       </ul>
 
       {monthPeriodStarts.size === 0 && !isAdding && (
         <div className="calendar-empty-note">
-          <p>Aucune date de début enregistrée pour ce mois.</p>
+          <p>{text('Aucune date de début enregistrée pour ce mois.', 'No period starts recorded for this month.')}</p>
         </div>
       )}
 
       {!isAdding ? (
         <div className="calendar-add-action">
           <button className="secondary-button" ref={addModeButtonRef} type="button" onClick={enterAddingMode}>
-            Ajouter plusieurs débuts
+            {addLabel}
           </button>
         </div>
       ) : (
         <div className="calendar-selection-panel" aria-labelledby="calendar-selection-title">
           <div>
-            <h3 id="calendar-selection-title">Ajouter plusieurs débuts</h3>
-            <p>Choisis chaque date séparément; aucune plage continue ne sera sélectionnée.</p>
-            <p className="field-hint">Les dates futures et les débuts déjà enregistrés sont désactivés.</p>
+            <h3 id="calendar-selection-title">{addLabel}</h3>
+            <p>
+              {text(
+                'Choisis chaque date séparément; aucune plage continue ne sera sélectionnée.',
+                'Choose each date separately; this does not select a continuous range.',
+              )}
+            </p>
+            <p className="field-hint">
+              {text(
+                'Les dates futures et les débuts déjà enregistrés sont désactivés.',
+                'Future dates and already recorded period starts are unavailable.',
+              )}
+            </p>
             <p className="selection-count" aria-live="polite" aria-atomic="true">
-              {orderedSelection.length} début{orderedSelection.length === 1 ? '' : 's'} sélectionné
-              {orderedSelection.length === 1 ? '' : 's'}
+              {text(`${selection} sélectionné${count === 1 ? '' : 's'}`, `${selection} selected`)}
             </p>
           </div>
           <div className="calendar-selection-actions">
             <button className="secondary-button" type="button" disabled={isSaving} onClick={() => leaveAddingMode()}>
-              Annuler
+              {text('Annuler', 'Cancel')}
             </button>
             <button
               className="primary-button"
@@ -511,9 +568,7 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
               disabled={orderedSelection.length === 0 || isSaving}
               onClick={saveSelectedDates}
             >
-              {isSaving
-                ? 'Enregistrement…'
-                : `Enregistrer ${orderedSelection.length} début${orderedSelection.length === 1 ? '' : 's'}`}
+              {isSaving ? text('Enregistrement…', 'Saving…') : text(`Enregistrer ${selection}`, `Save ${selection}`)}
             </button>
           </div>
         </div>

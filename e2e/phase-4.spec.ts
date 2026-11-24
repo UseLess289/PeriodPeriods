@@ -3,30 +3,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 
-function formatDate(date: string) {
-  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'UTC' }).format(
-    new Date(`${date}T00:00:00.000Z`),
-  )
-}
-
-async function selectEntryDate(page: Page, startDate: string) {
-  await page.getByRole('button', { name: /Premier jour des règles/ }).click()
-  const picker = page.getByRole('table', { name: /Calendrier de saisie pour/ })
-  const dateLabel = formatDate(startDate)
-  const dateName = new RegExp(`^${dateLabel}(?:, sélectionnée)?$`)
-  let attempts = 0
-  while ((await picker.getByRole('button', { name: dateName }).count()) === 0 && attempts < 48) {
-    await page.getByRole('button', { name: 'Mois précédent' }).click()
-    attempts += 1
-  }
-  await picker.getByRole('button', { name: dateName }).click()
-}
-
-async function recordStart(page: Page, date: string) {
-  await selectEntryDate(page, date)
-  await page.getByRole('button', { name: `Enregistrer le début du ${formatDate(date)}` }).click()
-  await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
-}
+import { recordStart } from './record-start'
 
 function validBackup(startDates: string[], firstDayOfWeek: 0 | 1 = 1) {
   return {
@@ -82,11 +59,11 @@ test('navigue avec la barre du bas et restaure l’historique', async ({ page })
   await expect(page.getByRole('heading', { name: 'Suivi des règles et du cycle' })).toBeVisible()
   await expect(page).toHaveURL(/\/$/)
 
-  await page.getByRole('button', { name: 'Calendrier', exact: true }).click()
-  await expect(page).toHaveURL(/\?view=calendar$/)
-  await expect(page.getByRole('button', { name: 'Calendrier', exact: true })).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByRole('heading', { name: 'Calendrier' })).toBeFocused()
-  const headingOutline = await page.getByRole('heading', { name: 'Calendrier' }).evaluate((element) => {
+  await page.getByRole('button', { name: 'Statistiques', exact: true }).click()
+  await expect(page).toHaveURL(/\?view=stats$/)
+  await expect(page.getByRole('button', { name: 'Statistiques', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { name: 'Statistiques' })).toBeFocused()
+  const headingOutline = await page.getByRole('heading', { name: 'Statistiques' }).evaluate((element) => {
     return getComputedStyle(element).outlineStyle
   })
   expect(headingOutline).toBe('none')
@@ -96,8 +73,8 @@ test('navigue avec la barre du bas et restaure l’historique', async ({ page })
   await expect(page.getByRole('heading', { name: 'Réglages' })).toBeFocused()
 
   await page.goBack()
-  await expect(page).toHaveURL(/\?view=calendar$/)
-  await expect(page.getByRole('button', { name: 'Calendrier', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page).toHaveURL(/\?view=stats$/)
+  await expect(page.getByRole('button', { name: 'Statistiques', exact: true })).toHaveAttribute('aria-current', 'page')
   await page.goForward()
   await expect(page).toHaveURL(/\?view=settings$/)
   await page.reload()
@@ -105,7 +82,7 @@ test('navigue avec la barre du bas et restaure l’historique', async ({ page })
   await expect(page.getByRole('button', { name: 'Réglages' })).toHaveAttribute('aria-current', 'page')
 
   await page.goBack()
-  await expect(page.getByRole('heading', { name: 'Calendrier' })).toBeFocused()
+  await expect(page.getByRole('heading', { name: 'Statistiques' })).toBeFocused()
   const verticalGesture = await page.evaluate(() => {
     const main = document.querySelector('main')!
     const options = (clientX: number, clientY: number) => ({
@@ -126,8 +103,9 @@ test('navigue avec la barre du bas et restaure l’historique', async ({ page })
   })
   expect(verticalGesture.prevented).toBe(false)
   expect(verticalGesture.touchAction).not.toBe('none')
-  await expect(page.getByRole('button', { name: 'Calendrier', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('button', { name: 'Statistiques', exact: true })).toHaveAttribute('aria-current', 'page')
 
+  await page.getByRole('button', { name: 'Accueil' }).click()
   const scrollStart = await page.evaluate(() => window.scrollY)
   const calendarBounds = await page.getByRole('table', { name: /Calendrier pour/ }).boundingBox()
   expect(calendarBounds).not.toBeNull()
@@ -145,16 +123,18 @@ test('navigue avec la barre du bas et restaure l’historique', async ({ page })
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollStart)
 
   await page.getByRole('button', { name: 'Accueil' }).click()
-  await page.getByRole('button', { name: /Premier jour des règles/ }).click()
-  await swipeFrom(page, '.date-picker-trigger', 300, 140)
+  await page.getByRole('button', { name: 'Ajouter un événement' }).click()
+  await swipeFrom(page, '#event-start', 300, 140)
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
   await expect(page.getByRole('heading', { name: 'Suivi des règles et du cycle' })).toBeVisible()
-  await expect(page).not.toHaveURL(/\?view=calendar$/)
+  await expect(page).not.toHaveURL(/\?view=stats$/)
 })
 
 test('change le mois par balayage sans changer de section ni sélectionner une date', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
-  await page.goto('/?view=calendar')
+  await page.goto('/')
 
   await expect(page.getByRole('heading', { name: 'Mars 2025' })).toBeVisible()
   const addActionPosition = await page.evaluate(() => {
@@ -172,7 +152,7 @@ test('change le mois par balayage sans changer de section ni sélectionner une d
 
   await swipeFrom(page, '.calendar-table', 300, 140, 320, 320)
   await expect(page.getByRole('heading', { name: 'Avril 2025' })).toBeVisible()
-  await expect(page).toHaveURL(/\?view=calendar$/)
+  await expect(page).toHaveURL(/\/$/)
 
   await swipeFrom(page, '.calendar-table', 140, 300, 320, 320)
   await expect(page.getByRole('heading', { name: 'Mars 2025' })).toBeVisible()
@@ -227,56 +207,27 @@ test('change le mois par balayage sans changer de section ni sélectionner une d
   await expect(page.locator('.selection-count')).toHaveText('1 début sélectionné')
 })
 
-test('le sélecteur ancré ouvre sur aujourd’hui, accepte une date passée et gère annulation et clavier', async ({
-  page,
-}) => {
+test('le bouton Ajouter ouvre la saisie, qui accepte une date passée et gère le clavier', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
   await page.goto('/')
 
-  const dateTrigger = page.getByRole('button', { name: /Premier jour des règles.*20 mars 2025/ })
-  await dateTrigger.click()
-  const picker = page.getByRole('dialog', { name: 'Mars 2025' })
-  await expect(picker).toBeVisible()
-  await expect(picker.getByRole('button', { name: '20 mars 2025, sélectionnée' })).toBeFocused()
-  await expect(picker.getByRole('button', { name: '21 mars 2025, date future non sélectionnable' })).toBeDisabled()
-  const pickerAccessibility = await new AxeBuilder({ page }).analyze()
-  expect(pickerAccessibility.violations).toEqual([])
-  await picker.getByRole('button', { name: 'Annuler' }).click()
-  await expect(picker).toHaveCount(0)
-  await expect(dateTrigger).toBeFocused()
-
-  const firstActivation = page.getByRole('button', { name: 'Choisir une date', exact: true })
-  const initialButtonBounds = await firstActivation.boundingBox()
-  await firstActivation.click()
-  const confirmationButton = page.getByRole('button', { name: 'Enregistrer le début du 20 mars 2025' })
-  await expect(confirmationButton).toBeVisible()
-  const openButtonBounds = await confirmationButton.boundingBox()
-  const openPickerBounds = await page.locator('.compact-date-picker').boundingBox()
-  const cancelBounds = await page.getByRole('button', { name: 'Annuler' }).boundingBox()
-  const navigationBounds = await page.locator('.bottom-nav').boundingBox()
-  expect(initialButtonBounds).not.toBeNull()
-  expect(openButtonBounds).not.toBeNull()
-  expect(openPickerBounds).not.toBeNull()
-  expect(cancelBounds).not.toBeNull()
-  expect(navigationBounds).not.toBeNull()
-  expect(openButtonBounds!.x).toBe(initialButtonBounds!.x)
-  expect(openButtonBounds!.y).toBe(initialButtonBounds!.y)
-  expect(openPickerBounds!.y).toBeGreaterThanOrEqual(0)
-  expect(openPickerBounds!.y + openPickerBounds!.height).toBeLessThanOrEqual(navigationBounds!.y)
-  expect(cancelBounds!.y).toBeGreaterThanOrEqual(openPickerBounds!.y)
-  expect(cancelBounds!.y + cancelBounds!.height).toBeLessThanOrEqual(navigationBounds!.y)
+  const add = page.getByRole('button', { name: 'Ajouter un événement' })
+  await add.focus()
+  await page.keyboard.press('Enter')
+  const dialog = page.getByRole('dialog', { name: 'Enregistrer une période' })
+  const start = dialog.getByLabel('Début des règles')
+  await expect(start).toBeFocused()
+  await expect(start).toHaveValue('2025-03-20')
+  await start.fill('2025-03-21')
+  expect(await start.evaluate((input: HTMLInputElement) => input.validity.rangeOverflow)).toBe(true)
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('button', { name: 'Choisir une date', exact: true })).toBeFocused()
+  await expect(dialog).toBeHidden()
+  await expect(add).toBeFocused()
 
-  await selectEntryDate(page, '2025-03-12')
-  const confirmButton = page.getByRole('button', { name: 'Enregistrer le début du 12 mars 2025' })
-  await expect(confirmButton).toBeFocused()
-  await confirmButton.click()
-  await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
-  await expect(page.getByText('12 mars 2025', { exact: true }).first()).toBeVisible()
-  const accessibility = await new AxeBuilder({ page }).analyze()
-  expect(accessibility.violations).toEqual([])
+  await recordStart(page, '2025-03-12')
+  await expect(page.locator('.latest-period-date')).toHaveAttribute('datetime', '2025-03-12')
 })
 
 test('sélectionne plusieurs débuts distincts, bloque les doublons et les dates futures', async ({ page }) => {
@@ -284,7 +235,6 @@ test('sélectionne plusieurs débuts distincts, bloque les doublons et les dates
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
   await page.goto('/')
   await recordStart(page, '2025-03-12')
-  await page.getByRole('button', { name: 'Calendrier', exact: true }).click()
   await page.getByRole('button', { name: 'Ajouter plusieurs débuts' }).click()
 
   const calendar = page.getByRole('table', { name: 'Calendrier pour mars 2025' })
@@ -295,7 +245,7 @@ test('sélectionne plusieurs débuts distincts, bloque les doublons et les dates
   await expect(calendar.getByRole('button', { name: '1 mars 2025', exact: true })).toBeFocused()
   await swipeFrom(page, 'button.calendar-date-choice[aria-label="1 mars 2025"]', 300, 100)
   await expect(page.getByRole('heading', { name: 'Avril 2025' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Calendrier', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('button', { name: 'Accueil', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: 'Ajouter plusieurs débuts' })).toBeVisible()
   await expect(page.locator('.selection-count')).toHaveText('0 débuts sélectionnés')
   await page.getByRole('button', { name: 'Mois précédent' }).click()
@@ -310,14 +260,15 @@ test('sélectionne plusieurs débuts distincts, bloque les doublons et les dates
   expect(selectionAccessibility.violations).toEqual([])
   await page.getByRole('button', { name: 'Enregistrer 2 débuts' }).click()
 
-  await expect(page.getByRole('status')).toContainText('2 débuts enregistrés sur cet appareil.')
+  await expect(page.locator('.calendar-section [role="status"]')).toContainText(
+    '2 débuts enregistrés sur cet appareil.',
+  )
   await expect(calendar.getByLabel('Début enregistré le 13 mars 2025')).toBeVisible()
   await expect(calendar.getByLabel('Début enregistré le 16 mars 2025')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Ajouter plusieurs débuts' })).toBeFocused()
   await page.getByRole('button', { name: 'Accueil' }).click()
   await expect(page.getByRole('heading', { name: 'Pas encore assez de dates.' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Calendrier', exact: true }).click()
   await page.getByRole('button', { name: 'Ajouter plusieurs débuts' }).click()
   const refreshedCalendar = page.getByRole('table', { name: 'Calendrier pour mars 2025' })
   await expect(refreshedCalendar.getByRole('button', { name: /13 mars 2025, début déjà enregistré/ })).toBeDisabled()
@@ -331,15 +282,13 @@ test('sélectionne plusieurs débuts distincts, bloque les doublons et les dates
 test('exporte un fichier v1 et l’import valide remplace les dates et réglages après confirmation', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-03-27T12:00:00.000Z') })
   await page.goto('/')
-  await page.getByRole('button', { name: 'Choisir une date', exact: true }).click()
-  await page.getByRole('button', { name: 'Enregistrer le début du 27 mars 2025' }).click()
-  await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
+  await recordStart(page, '2025-03-27')
 
   await page.getByRole('button', { name: 'Réglages' }).click()
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Télécharger la sauvegarde' }).click()
   const download = await downloadPromise
-  expect(download.suggestedFilename()).toMatch(/^periodperiods-sauvegarde-.*\.json$/)
+  expect(download.suggestedFilename()).toMatch(/^periodperiods-backup-.*\.json$/)
   const downloadPath = await download.path()
   expect(downloadPath).not.toBeNull()
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'))
@@ -365,9 +314,8 @@ test('exporte un fichier v1 et l’import valide remplace les dates et réglages
   await page.getByRole('button', { name: 'Accueil' }).click()
   await expect(page.locator('.latest-period-date')).toHaveAttribute('datetime', '2025-03-27')
   await expect(page.getByRole('heading', { name: 'Prochain début estimé' })).toBeVisible()
-  await expect(page.getByText('24 avril 2025')).toHaveAttribute('datetime', '2025-04-24')
+  await expect(page.getByText('24 avril', { exact: true })).toHaveAttribute('datetime', '2025-04-24')
 
-  await page.getByRole('button', { name: 'Calendrier', exact: true }).click()
   const calendar = page.getByRole('table', { name: 'Calendrier pour mars 2025' })
   await expect(calendar.getByRole('columnheader').first()).toHaveAccessibleName('dimanche')
 })
@@ -421,13 +369,11 @@ test('reste dans la largeur aux tailles cibles et conserve thèmes, contraste et
     expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport)
     expect(dimensions.main).toBeLessThanOrEqual(dimensions.viewport)
 
-    await page.getByRole('button', { name: /Premier jour des règles/ }).click()
-    const popover = page.locator('.compact-date-picker')
-    const popoverBounds = await popover.boundingBox()
-    expect(popoverBounds).not.toBeNull()
-    expect(popoverBounds!.x + popoverBounds!.width).toBeLessThanOrEqual(width + 1)
+    await page.getByRole('button', { name: 'Ajouter un événement' }).click()
+    const dialogBounds = await page.getByRole('dialog').boundingBox()
+    expect(dialogBounds).not.toBeNull()
+    expect(dialogBounds!.x + dialogBounds!.width).toBeLessThanOrEqual(width + 1)
     await page.getByRole('button', { name: 'Annuler' }).click()
-    await page.getByRole('button', { name: 'Calendrier', exact: true }).click()
     const calendarWidth = await page.evaluate(() => document.documentElement.scrollWidth)
     expect(calendarWidth).toBeLessThanOrEqual(width)
     await page.getByRole('button', { name: 'Réglages' }).click()
@@ -443,7 +389,7 @@ test('reste dans la largeur aux tailles cibles et conserve thèmes, contraste et
   expect(darkAccessibility.violations).toEqual([])
 
   const reducedMotionDuration = await page
-    .getByRole('button', { name: 'Calendrier', exact: true })
+    .getByRole('button', { name: 'Statistiques', exact: true })
     .evaluate((element) => {
       return Number.parseFloat(getComputedStyle(element).transitionDuration)
     })

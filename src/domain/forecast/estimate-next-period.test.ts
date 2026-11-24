@@ -28,6 +28,7 @@ describe('next period estimate', () => {
       cycleCount: 4,
       usedCycles: 4,
       medianCycleLength: 29.5,
+      uncertaintyDays: 2,
       predictedStartDate: '2025-05-29',
       isPast: false,
     })
@@ -53,10 +54,34 @@ describe('next period estimate', () => {
       cycleCount: 7,
       usedCycles: 6,
       medianCycleLength: 29.5,
+      uncertaintyDays: 2,
       predictedStartDate: '2025-09-26',
       earliestStartDate: '2025-09-24',
       latestStartDate: '2025-09-28',
       isPast: false,
+    })
+  })
+
+  it('keeps the full observed range covered when the median is off-centre', () => {
+    const estimate = estimateNextPeriod(
+      [
+        { startDate: '2025-01-01' },
+        { startDate: '2025-01-26' },
+        { startDate: '2025-02-23' },
+        { startDate: '2025-03-24' },
+        { startDate: '2025-04-23' },
+        { startDate: '2025-05-24' },
+        { startDate: '2025-06-25' },
+      ],
+      '2025-06-25',
+    )
+
+    expect(estimate).toMatchObject({
+      kind: 'range',
+      uncertaintyDays: 5,
+      predictedStartDate: '2025-07-25',
+      earliestStartDate: '2025-07-20',
+      latestStartDate: '2025-07-27',
     })
   })
 

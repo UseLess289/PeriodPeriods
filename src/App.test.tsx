@@ -6,29 +6,6 @@ import { createPeriodDataStore } from './data/period-data-store'
 import type { PeriodDataStore } from './data/period-data-store'
 import App from './App'
 
-function formatDate(date: string): string {
-  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'UTC' }).format(
-    new Date(`${date}T00:00:00.000Z`),
-  )
-}
-
-async function selectEntryDate(user: ReturnType<typeof userEvent.setup>, date: string) {
-  await user.click(screen.getByRole('button', { name: /Premier jour des règles/ }))
-  const picker = screen.getByRole('table', { name: /Calendrier de saisie pour/ })
-  const dateLabel = formatDate(date)
-  let attempts = 0
-  while (!within(picker).queryByRole('button', { name: dateLabel }) && attempts < 36) {
-    await user.click(screen.getByRole('button', { name: 'Mois précédent' }))
-    attempts += 1
-  }
-  await user.click(within(picker).getByRole('button', { name: dateLabel }))
-}
-
-async function saveEntryDate(user: ReturnType<typeof userEvent.setup>, date: string) {
-  await selectEntryDate(user, date)
-  await user.click(screen.getByRole('button', { name: `Enregistrer le début du ${formatDate(date)}` }))
-}
-
 describe('PeriodPeriods app', () => {
   let store: PeriodDataStore
 
@@ -43,114 +20,19 @@ describe('PeriodPeriods app', () => {
     store.close()
   })
 
-  it('shows the first-use form with today prefilled and the three main destinations', async () => {
+  it('shows the Add button instead of the inline form and the three main destinations', async () => {
     render(<App store={store} today="2025-03-20" />)
 
-    expect(await screen.findByRole('button', { name: /Premier jour des règles.*20 mars 2025/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Ajouter un événement' })).toBeInTheDocument()
+    expect(screen.getByText('PeriodPeriods')).toBeInTheDocument()
+    expect(document.querySelector('.brand-mark, .brand-kicker')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Suivi des règles et du cycle' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Choisir une date' })).toBeEnabled()
+    expect(screen.queryByRole('heading', { name: 'Enregistrer un début de règles' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Accueil' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('button', { name: 'Calendrier' })).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Calendrier pour mars 2025' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Statistiques' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Réglages' })).toBeInTheDocument()
     expect(screen.getByText(/plusieurs dates seront nécessaires/i)).toBeInTheDocument()
-  })
-
-  it('opens the compact date calendar, selects a past start and records it', async () => {
-    const user = userEvent.setup()
-    render(<App store={store} today="2025-03-20" />)
-
-    await screen.findByRole('button', { name: /Premier jour des règles/ })
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    await saveEntryDate(user, '2025-03-12')
-
-    expect(await screen.findByText('Date enregistrée sur cet appareil.')).toHaveAttribute('role', 'status')
-    expect(screen.getByText('Dernier début enregistré')).toBeInTheDocument()
-    expect(screen.getByText('12 mars 2025')).toHaveAttribute('datetime', '2025-03-12')
-    await expect(store.getPeriods()).resolves.toMatchObject([{ startDate: '2025-03-12' }])
-  })
-
-  it('opens the picker on the first keyboard activation and confirms the selected date on the next', async () => {
-    const user = userEvent.setup()
-    render(<App store={store} today="2025-03-20" />)
-
-    await screen.findByRole('button', { name: 'Choisir une date' })
-    const submitButton = screen.getByRole('button', { name: 'Choisir une date' })
-    submitButton.focus()
-    await user.keyboard('{Enter}')
-    const todayInPicker = screen.getByRole('button', { name: '20 mars 2025, sélectionnée' })
-    expect(todayInPicker).toHaveFocus()
-    expect(screen.getByRole('button', { name: 'Enregistrer le début du 20 mars 2025' })).toBeInTheDocument()
-    await user.keyboard('{ArrowLeft}{Enter}')
-    expect(screen.getByRole('button', { name: 'Enregistrer le début du 19 mars 2025' })).toHaveFocus()
-    await user.keyboard('{Enter}')
-
-    expect(await screen.findByText('Date enregistrée sur cet appareil.')).toHaveAttribute('role', 'status')
-    await expect(store.getPeriods()).resolves.toMatchObject([{ startDate: '2025-03-19' }])
-  })
-
-  it('disables future dates and explains why they cannot be selected', async () => {
-    const user = userEvent.setup()
-    render(<App store={store} today="2025-03-20" />)
-
-    await user.click(await screen.findByRole('button', { name: /Premier jour des règles/ }))
-    const picker = screen.getByRole('table', { name: 'Calendrier de saisie pour Mars 2025' })
-    expect(within(picker).getByRole('button', { name: '21 mars 2025, date future non sélectionnable' })).toBeDisabled()
-    expect(screen.getByText(/dates après aujourd’hui ne sont pas sélectionnables/i)).toBeInTheDocument()
-    await expect(store.getPeriods()).resolves.toEqual([])
-  })
-
-  it('cancels the date picker with Escape and returns focus to the opener', async () => {
-    const user = userEvent.setup()
-    render(<App store={store} today="2025-03-20" />)
-
-    const submitButton = await screen.findByRole('button', { name: 'Choisir une date' })
-    await user.click(submitButton)
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-    await user.keyboard('{Escape}')
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(submitButton).toHaveFocus()
-    expect(submitButton).toHaveTextContent('Choisir une date')
-    await expect(store.getPeriods()).resolves.toEqual([])
-  })
-
-  it('explains a duplicate start and preserves the date', async () => {
-    await store.addPeriod({ startDate: '2025-03-12' })
-    const user = userEvent.setup()
-    render(<App store={store} today="2025-03-20" />)
-
-    await screen.findByRole('button', { name: /Premier jour des règles/ })
-    await saveEntryDate(user, '2025-03-12')
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(/déjà enregistré/i)
-    const dateTrigger = screen.getByRole('button', { name: /Premier jour des règles.*12 mars 2025/ })
-    expect(dateTrigger).toHaveFocus()
-    expect(dateTrigger).toHaveAttribute('aria-invalid', 'true')
-    expect(dateTrigger).toHaveAttribute('aria-describedby', 'period-start-hint period-start-error')
-    await expect(store.getPeriods()).resolves.toHaveLength(1)
-  })
-
-  it('keeps the form available after a storage error and can retry', async () => {
-    const originalAdd = store.addPeriod.bind(store)
-    const addPeriod = vi.spyOn(store, 'addPeriod').mockRejectedValueOnce(new Error('IndexedDB unavailable'))
-    addPeriod.mockImplementation(originalAdd)
-    const user = userEvent.setup()
-    render(<App store={store} today="2025-03-20" />)
-
-    await screen.findByRole('button', { name: /Premier jour des règles/ })
-    await saveEntryDate(user, '2025-03-12')
-
-    expect(await screen.findByText(/enregistrement a échoué/i)).toHaveAttribute('role', 'alert')
-    expect(screen.getByRole('button', { name: /Premier jour des règles.*12 mars 2025/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Premier jour des règles.*12 mars 2025/ })).toHaveFocus()
-    expect(screen.getByRole('button', { name: /Premier jour des règles.*12 mars 2025/ })).not.toHaveAttribute(
-      'aria-invalid',
-      'true',
-    )
-
-    await user.click(screen.getByRole('button', { name: 'Enregistrer le début du 12 mars 2025' }))
-    expect(await screen.findByText('Date enregistrée sur cet appareil.')).toHaveAttribute('role', 'status')
-    expect(addPeriod).toHaveBeenCalledTimes(2)
   })
 
   it('retries when the local data cannot be loaded', async () => {
@@ -163,7 +45,7 @@ describe('PeriodPeriods app', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/impossible de charger/i)
     await user.click(screen.getByRole('button', { name: 'Réessayer' }))
 
-    expect(await screen.findByRole('button', { name: /Premier jour des règles/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Ajouter un événement' })).toBeInTheDocument()
     await waitFor(() => expect(getPeriods).toHaveBeenCalledTimes(2))
   })
 
@@ -171,12 +53,9 @@ describe('PeriodPeriods app', () => {
     await store.addPeriod({ startDate: '2025-03-12' })
     await store.addPeriod({ startDate: '2025-03-25' })
     await store.saveSettings({ forecastMethod: 'median-6', firstDayOfWeek: 0 })
-    const user = userEvent.setup()
     render(<App store={store} today="2025-03-20" />)
 
-    await user.click(await screen.findByRole('button', { name: 'Calendrier' }))
-
-    const calendar = screen.getByRole('table', { name: 'Calendrier pour mars 2025' })
+    const calendar = await screen.findByRole('table', { name: 'Calendrier pour mars 2025' })
     expect(within(calendar).getByLabelText('Début enregistré le 12 mars 2025')).toBeInTheDocument()
     expect(
       within(calendar).getByLabelText('Début enregistré pour une date à venir le 25 mars 2025'),
@@ -188,8 +67,7 @@ describe('PeriodPeriods app', () => {
     const user = userEvent.setup()
     render(<App store={store} today="2025-03-20" />)
 
-    await screen.findByRole('button', { name: /Premier jour des règles/ })
-    await user.click(await screen.findByRole('button', { name: 'Calendrier' }))
+    await screen.findByRole('button', { name: 'Ajouter un événement' })
     expect(screen.getByRole('table', { name: 'Calendrier pour mars 2025' })).toBeInTheDocument()
     expect(screen.getByText(/aucune date de début enregistrée pour ce mois/i)).toBeInTheDocument()
 
@@ -198,10 +76,10 @@ describe('PeriodPeriods app', () => {
     await user.click(screen.getByRole('button', { name: 'Mois suivant' }))
     expect(screen.getByRole('table', { name: 'Calendrier pour mars 2025' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Ajouter plusieurs débuts' }))
+    await user.click(await screen.findByRole('button', { name: 'Ajouter plusieurs débuts' }))
     expect(screen.getByRole('heading', { name: 'Ajouter plusieurs débuts' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Annuler' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Calendrier' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Accueil' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('selects several distinct calendar dates and saves them as one batch', async () => {
@@ -209,8 +87,7 @@ describe('PeriodPeriods app', () => {
     const user = userEvent.setup()
     render(<App store={store} today="2025-03-20" />)
 
-    await user.click(await screen.findByRole('button', { name: 'Calendrier' }))
-    await user.click(screen.getByRole('button', { name: 'Ajouter plusieurs débuts' }))
+    await user.click(await screen.findByRole('button', { name: 'Ajouter plusieurs débuts' }))
 
     const calendar = screen.getByRole('table', { name: 'Calendrier pour mars 2025' })
     expect(within(calendar).getByRole('button', { name: /12 mars 2025, début déjà enregistré/i })).toBeDisabled()
@@ -231,11 +108,10 @@ describe('PeriodPeriods app', () => {
       { startDate: '2025-03-16' },
     ])
 
-    await user.click(screen.getByRole('button', { name: 'Accueil' }))
     expect(document.querySelector('.latest-period-date')).toHaveAttribute('datetime', '2025-03-16')
   })
 
-  it('shows a low-confidence median after three intervals and marks the estimate in the calendar', async () => {
+  it('shows the median and its uncertainty after three intervals and marks the estimate in the calendar', async () => {
     for (const startDate of ['2025-01-01', '2025-01-29', '2025-02-26', '2025-03-26']) {
       await store.addPeriod({ startDate })
     }
@@ -245,18 +121,15 @@ describe('PeriodPeriods app', () => {
     render(<App store={store} today="2025-03-26" />)
 
     expect(await screen.findByRole('heading', { name: 'Prochain début estimé' })).toBeInTheDocument()
-    expect(screen.getByText('23 avril 2025')).toHaveAttribute('datetime', '2025-04-23')
-    expect(screen.getByText(/confiance faible/i)).toBeInTheDocument()
-    expect(screen.getByText(/pas une certitude|ni une certitude/i)).toBeInTheDocument()
-    expect(screen.getByText(/méthode contraceptive/i)).toBeInTheDocument()
-    expect(screen.getByText(/dates après aujourd’hui.*n’entrent pas dans ce calcul/i)).toBeInTheDocument()
+    expect(screen.getByText('23 avril')).toHaveAttribute('datetime', '2025-04-23')
+    expect(screen.getByText('± 0 j')).toBeInTheDocument()
+    expect(screen.queryByText(/ni une certitude|méthode contraceptive/i)).not.toBeInTheDocument()
 
     await user.click(screen.getByText('Comprendre l’estimation'))
     expect(
       screen.getByText(/trois à cinq intervalles, la médiane utilise tous les intervalles disponibles/i),
     ).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Calendrier' }))
     await user.click(screen.getByRole('button', { name: 'Mois suivant' }))
     const calendar = screen.getByRole('table', { name: 'Calendrier pour avril 2025' })
     expect(within(calendar).getByLabelText('Date centrale estimée le 23 avril 2025')).toBeInTheDocument()
@@ -319,6 +192,7 @@ describe('PeriodPeriods app', () => {
     render(<App store={store} today="2025-03-20" />)
 
     const explanation = await screen.findByText('Comprendre l’estimation')
+    expect(screen.getByRole('table', { name: 'Calendrier pour mars 2025' })).toAppearBefore(explanation)
     expect(explanation.closest('details')).not.toHaveAttribute('open')
     await user.click(explanation)
 
@@ -331,7 +205,7 @@ describe('PeriodPeriods app', () => {
     expect(screen.getByText(/durées minimale et maximale au dernier début passé/i)).toBeInTheDocument()
   })
 
-  it('shows the six-cycle range and marks its bounds separately from the median', async () => {
+  it('shows the six-cycle uncertainty and marks its bounds separately from the median', async () => {
     for (const startDate of [
       '2025-01-01',
       '2025-03-02',
@@ -347,11 +221,9 @@ describe('PeriodPeriods app', () => {
     const user = userEvent.setup()
     render(<App store={store} today="2025-08-27" />)
 
-    expect(await screen.findByText('26 septembre 2025')).toHaveAttribute('datetime', '2025-09-26')
-    expect(screen.getByText(/24 au 28 septembre 2025/i)).toBeInTheDocument()
-    expect(screen.getByText(/du plus court au plus long des six derniers intervalles/i)).toBeInTheDocument()
+    expect(await screen.findByText('26 septembre')).toHaveAttribute('datetime', '2025-09-26')
+    expect(screen.getByText('± 2 j')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Calendrier' }))
     await user.click(screen.getByRole('button', { name: 'Mois suivant' }))
     const calendar = screen.getByRole('table', { name: 'Calendrier pour septembre 2025' })
     expect(within(calendar).getByLabelText('Borne basse de la plage estimée le 24 septembre 2025')).toBeInTheDocument()
@@ -365,37 +237,38 @@ describe('PeriodPeriods app', () => {
     }
     render(<App store={store} today="2025-04-25" />)
 
-    expect(await screen.findByText('23 avril 2025')).toHaveAttribute('datetime', '2025-04-23')
-    expect(screen.getByText(/date centrale estimée est passée/i)).toBeInTheDocument()
+    expect(await screen.findByText('23 avril')).toHaveAttribute('datetime', '2025-04-23')
+    expect(screen.getByText('± 0 j')).toBeInTheDocument()
   })
 
   it('changes destination with the keyboard and moves focus to its heading', async () => {
     const user = userEvent.setup()
     render(<App store={store} today="2025-03-20" />)
 
-    const dateTrigger = await screen.findByRole('button', { name: /Premier jour des règles/ })
+    const addButton = await screen.findByRole('button', { name: 'Ajouter un événement' })
     const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
-    const calendarButton = within(navigation).getByRole('button', { name: 'Calendrier' })
+    const statsButton = within(navigation).getByRole('button', { name: 'Statistiques' })
 
     await user.tab()
     expect(screen.getByRole('link', { name: 'Aller au contenu' })).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Passer au thème sombre' })).toHaveFocus()
     await user.tab()
-    expect(dateTrigger).toHaveFocus()
-    await user.click(calendarButton)
+    expect(screen.getByRole('button', { name: 'Mois précédent' })).toHaveFocus()
+    expect(addButton).toBeInTheDocument()
+    await user.click(statsButton)
 
-    const calendarHeading = screen.getByRole('heading', { name: 'Calendrier' })
-    expect(calendarHeading).toHaveFocus()
-    expect(calendarButton).toHaveAttribute('aria-current', 'page')
-    expect(await screen.findByRole('table', { name: /calendrier pour/i })).toBeInTheDocument()
+    const statsHeading = screen.getByRole('heading', { name: 'Statistiques' })
+    expect(statsHeading).toHaveFocus()
+    expect(statsButton).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('heading', { name: 'Durées observées des cycles' })).toBeInTheDocument()
   })
 
   it('shows the settings destination as current when selected', async () => {
     const user = userEvent.setup()
     render(<App store={store} today="2025-03-20" />)
 
-    await screen.findByRole('button', { name: /Premier jour des règles/ })
+    await screen.findByRole('button', { name: 'Ajouter un événement' })
     const navigation = screen.getByRole('navigation', { name: 'Navigation principale' })
     const settingsButton = within(navigation).getByRole('button', { name: 'Réglages' })
     await user.click(settingsButton)

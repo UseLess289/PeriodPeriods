@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { recordStart } from './record-start'
 
 async function importStartDates(page: Page, startDates: string[]) {
   const createdAt = '2025-01-01T00:00:00.000Z'
@@ -45,7 +46,7 @@ test('présente l’historique complet et explique la médiane sur un petit écr
   await expect(history.getByRole('listitem')).toHaveCount(7)
   await expect(page.getByText('7 intervalles observés')).toBeVisible()
   await expect(page.getByText(/de 8 à 29 jours/i)).toBeVisible()
-  await expect(page.getByText('29 juillet 2025', { exact: true })).toHaveAttribute('datetime', '2025-07-29')
+  await expect(page.locator('.forecast-date')).toHaveAttribute('datetime', '2025-07-29')
 
   const methodSummary = page.getByText('Comprendre l’estimation')
   await methodSummary.focus()
@@ -70,11 +71,13 @@ test('présente l’historique complet et explique la médiane sur un petit écr
   expect(accessibility.violations).toEqual([])
 
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  const transitionDuration = await page.getByRole('button', { name: 'Calendrier', exact: true }).evaluate((element) => {
-    return Number.parseFloat(getComputedStyle(element).transitionDuration)
-  })
+  const transitionDuration = await page
+    .getByRole('button', { name: 'Statistiques', exact: true })
+    .evaluate((element) => {
+      return Number.parseFloat(getComputedStyle(element).transitionDuration)
+    })
   expect(transitionDuration).toBeLessThan(0.001)
-  const calendarButton = page.getByRole('button', { name: 'Calendrier', exact: true })
+  const calendarButton = page.getByRole('button', { name: 'Statistiques', exact: true })
   await calendarButton.scrollIntoViewIfNeeded()
   const calendarButtonBox = await calendarButton.boundingBox()
   expect(calendarButtonBox).not.toBeNull()
@@ -114,15 +117,7 @@ test('garde un historique long utilisable sans débordement sur iPhone étroit',
 test('distingue un début enregistré qui devient une date à venir', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-07-01T12:00:00.000Z') })
   await page.goto('/')
-  await page.getByRole('button', { name: /Premier jour des règles/ }).click()
-  await page
-    .getByRole('table', { name: /Calendrier de saisie pour juillet 2025/i })
-    .getByRole('button', {
-      name: '1 juillet 2025, sélectionnée',
-    })
-    .click()
-  await page.getByRole('button', { name: 'Enregistrer le début du 1 juillet 2025' }).click()
-  await expect(page.getByRole('status')).toContainText('Date enregistrée sur cet appareil.')
+  await recordStart(page, '2025-07-01')
 
   await page.clock.setFixedTime(new Date('2025-06-30T12:00:00.000Z'))
   await page.reload()

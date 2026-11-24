@@ -15,6 +15,7 @@ type LowConfidenceEstimate = {
   cycleCount: number
   usedCycles: number
   medianCycleLength: number
+  uncertaintyDays: number
   predictedStartDate: CivilDate
   isPast: boolean
 }
@@ -24,6 +25,7 @@ type RangeEstimate = {
   cycleCount: number
   usedCycles: 6
   medianCycleLength: number
+  uncertaintyDays: number
   predictedStartDate: CivilDate
   earliestStartDate: CivilDate
   latestStartDate: CivilDate
@@ -40,6 +42,10 @@ function median(values: number[]): number {
 
 function roundMedianToCivilDays(value: number): number {
   return Math.floor(value + 0.5)
+}
+
+function getUncertaintyRadius(cycleLengths: number[], medianDays: number): number {
+  return Math.max(medianDays - Math.min(...cycleLengths), Math.max(...cycleLengths) - medianDays)
 }
 
 export function estimateNextPeriod(periods: readonly PeriodStart[], today: CivilDate): PeriodStartEstimate {
@@ -62,8 +68,10 @@ export function estimateNextPeriod(periods: readonly PeriodStart[], today: Civil
 
   const recentCycleLengths = cycleCount >= 6 ? cycleLengths.slice(-6) : cycleLengths
   const medianCycleLength = median(recentCycleLengths)
+  const roundedMedian = roundMedianToCivilDays(medianCycleLength)
+  const uncertaintyDays = getUncertaintyRadius(recentCycleLengths, roundedMedian)
   const lastStart = eligibleStarts.at(-1)!
-  const predictedStartDate = addCivilDays(lastStart, roundMedianToCivilDays(medianCycleLength))
+  const predictedStartDate = addCivilDays(lastStart, roundedMedian)
   const isPast = predictedStartDate < today
 
   if (cycleCount < 6) {
@@ -72,6 +80,7 @@ export function estimateNextPeriod(periods: readonly PeriodStart[], today: Civil
       cycleCount,
       usedCycles: recentCycleLengths.length,
       medianCycleLength,
+      uncertaintyDays,
       predictedStartDate,
       isPast,
     }
@@ -82,6 +91,7 @@ export function estimateNextPeriod(periods: readonly PeriodStart[], today: Civil
     cycleCount,
     usedCycles: 6,
     medianCycleLength,
+    uncertaintyDays,
     predictedStartDate,
     earliestStartDate: addCivilDays(lastStart, Math.min(...recentCycleLengths)),
     latestStartDate: addCivilDays(lastStart, Math.max(...recentCycleLengths)),
