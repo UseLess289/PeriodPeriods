@@ -157,6 +157,19 @@ test('change le mois par balayage sans changer de section ni sélectionner une d
   await page.goto('/?view=calendar')
 
   await expect(page.getByRole('heading', { name: 'Mars 2025' })).toBeVisible()
+  const addActionPosition = await page.evaluate(() => {
+    const table = document.querySelector('.calendar-table')!
+    const legend = document.querySelector('.calendar-legend')!
+    const addAction = document.querySelector('.calendar-add-action')!
+    return {
+      tableBottom: table.getBoundingClientRect().bottom + window.scrollY,
+      legendBottom: legend.getBoundingClientRect().bottom + window.scrollY,
+      addActionTop: addAction.getBoundingClientRect().top + window.scrollY,
+    }
+  })
+  expect(addActionPosition.addActionTop).toBeGreaterThan(addActionPosition.tableBottom)
+  expect(addActionPosition.addActionTop).toBeGreaterThan(addActionPosition.legendBottom)
+
   await swipeFrom(page, '.calendar-table', 300, 140, 320, 320)
   await expect(page.getByRole('heading', { name: 'Avril 2025' })).toBeVisible()
   await expect(page).toHaveURL(/\?view=calendar$/)
@@ -168,6 +181,12 @@ test('change le mois par balayage sans changer de section ni sélectionner une d
   await expect(page.getByRole('heading', { name: 'Mars 2025' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Ajouter plusieurs débuts' }).click()
+  const selectionPanelPosition = await page.evaluate(() => ({
+    tableBottom: document.querySelector('.calendar-table')!.getBoundingClientRect().bottom + window.scrollY,
+    panelTop: document.querySelector('.calendar-selection-panel')!.getBoundingClientRect().top + window.scrollY,
+  }))
+  expect(selectionPanelPosition.panelTop).toBeGreaterThan(selectionPanelPosition.tableBottom)
+
   await tapWithTouch(page, 'button.calendar-date-choice[aria-label="1 mars 2025"]')
   await expect(page.locator('.selection-count')).toHaveText('1 début sélectionné')
 

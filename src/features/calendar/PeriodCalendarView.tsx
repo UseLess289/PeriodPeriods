@@ -319,41 +319,6 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
         </div>
       </div>
 
-      {!isAdding ? (
-        <div className="calendar-add-action">
-          <button className="secondary-button" ref={addModeButtonRef} type="button" onClick={enterAddingMode}>
-            Ajouter plusieurs débuts
-          </button>
-        </div>
-      ) : (
-        <div className="calendar-selection-panel" aria-labelledby="calendar-selection-title">
-          <div>
-            <h3 id="calendar-selection-title">Ajouter plusieurs débuts</h3>
-            <p>Choisis chaque date séparément; aucune plage continue ne sera sélectionnée.</p>
-            <p className="field-hint">Les dates futures et les débuts déjà enregistrés sont désactivés.</p>
-            <p className="selection-count" aria-live="polite" aria-atomic="true">
-              {orderedSelection.length} début{orderedSelection.length === 1 ? '' : 's'} sélectionné
-              {orderedSelection.length === 1 ? '' : 's'}
-            </p>
-          </div>
-          <div className="calendar-selection-actions">
-            <button className="secondary-button" type="button" disabled={isSaving} onClick={() => leaveAddingMode()}>
-              Annuler
-            </button>
-            <button
-              className="primary-button"
-              type="button"
-              disabled={orderedSelection.length === 0 || isSaving}
-              onClick={saveSelectedDates}
-            >
-              {isSaving
-                ? 'Enregistrement…'
-                : `Enregistrer ${orderedSelection.length} début${orderedSelection.length === 1 ? '' : 's'}`}
-            </button>
-          </div>
-        </div>
-      )}
-
       <table
         className="calendar-table"
         aria-label={`Calendrier pour ${monthTitle}`}
@@ -516,6 +481,41 @@ export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, o
       {monthPeriodStarts.size === 0 && !isAdding && (
         <div className="calendar-empty-note">
           <p>Aucune date de début enregistrée pour ce mois.</p>
+        </div>
+      )}
+
+      {!isAdding ? (
+        <div className="calendar-add-action">
+          <button className="secondary-button" ref={addModeButtonRef} type="button" onClick={enterAddingMode}>
+            Ajouter plusieurs débuts
+          </button>
+        </div>
+      ) : (
+        <div className="calendar-selection-panel" aria-labelledby="calendar-selection-title">
+          <div>
+            <h3 id="calendar-selection-title">Ajouter plusieurs débuts</h3>
+            <p>Choisis chaque date séparément; aucune plage continue ne sera sélectionnée.</p>
+            <p className="field-hint">Les dates futures et les débuts déjà enregistrés sont désactivés.</p>
+            <p className="selection-count" aria-live="polite" aria-atomic="true">
+              {orderedSelection.length} début{orderedSelection.length === 1 ? '' : 's'} sélectionné
+              {orderedSelection.length === 1 ? '' : 's'}
+            </p>
+          </div>
+          <div className="calendar-selection-actions">
+            <button className="secondary-button" type="button" disabled={isSaving} onClick={() => leaveAddingMode()}>
+              Annuler
+            </button>
+            <button
+              className="primary-button"
+              type="button"
+              disabled={orderedSelection.length === 0 || isSaving}
+              onClick={saveSelectedDates}
+            >
+              {isSaving
+                ? 'Enregistrement…'
+                : `Enregistrer ${orderedSelection.length} début${orderedSelection.length === 1 ? '' : 's'}`}
+            </button>
+          </div>
         </div>
       )}
     </section>
