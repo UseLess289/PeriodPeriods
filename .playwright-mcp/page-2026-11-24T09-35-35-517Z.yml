@@ -1,0 +1,39 @@
+- generic [ref=e3]:
+  - link "Aller au contenu" [ref=e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - generic [aria-hidden] [ref=e7]: P
+      - generic [ref=e8]:
+        - paragraph [ref=e9]: PeriodPeriods
+        - paragraph [ref=e10]: Suivi des règles, sans compte.
+    - button "Passer au thème clair" [ref=e235] [cursor=pointer]
+  - main [ref=e16]:
+    - generic [ref=e17]:
+      - paragraph [ref=e18]: Réglages
+      - heading "Réglages" [active] [level=1] [ref=e213]
+    - region "Sauvegarde locale" [ref=e214]:
+      - generic [ref=e215]:
+        - paragraph [ref=e216]: Sur cet appareil
+        - heading "Sauvegarde locale" [level=2] [ref=e217]
+        - paragraph [ref=e218]: Exporte ou importe une sauvegarde JSON v1. Aucun compte ni synchronisation n’est utilisé.
+      - region "Exporter" [ref=e219]:
+        - heading "Exporter" [level=3] [ref=e220]
+        - paragraph [ref=e221]: Crée un fichier JSON avec les dates de début et les réglages conservés localement.
+        - button "Télécharger la sauvegarde" [ref=e222] [cursor=pointer]
+        - paragraph [ref=e223]: Le fichier contient des données personnelles et les réglages conservés sur cet appareil. Garde-le en lieu sûr.
+        - status [ref=e224]
+      - region "Importer" [ref=e225]:
+        - heading "Importer" [level=3] [ref=e226]
+        - paragraph [ref=e227]: Choisis une sauvegarde v1 pour en vérifier le contenu avant le remplacement.
+        - paragraph [ref=e228]: Fichier de sauvegarde JSON
+        - generic [ref=e229]:
+          - button "Fichier de sauvegarde JSON" [ref=e230]
+          - button "Choisir un fichier JSON" [ref=e231] [cursor=pointer]
+          - generic [ref=e232]: Aucun fichier choisi
+        - paragraph [ref=e233]: L’import valide le fichier avant toute modification. Il remplace toutes les dates et réglages présents.
+        - status [ref=e234]
+  - navigation "Navigation principale" [ref=e21]:
+    - button "Accueil" [ref=e22] [cursor=pointer]
+    - button "Calendrier" [ref=e27] [cursor=pointer]
+    - button "Réglages" [ref=e31] [cursor=pointer]

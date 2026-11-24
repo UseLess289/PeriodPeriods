@@ -1,0 +1,158 @@
+- generic [ref=f4e3]:
+  - link "Aller au contenu" [ref=f4e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f4e5]:
+    - generic [ref=f4e6]:
+      - generic [aria-hidden] [ref=f4e7]: P
+      - generic [ref=f4e8]:
+        - paragraph [ref=f4e9]: PeriodPeriods
+        - paragraph [ref=f4e10]: Suivi des règles, sans compte.
+    - button "Passer au thème sombre" [ref=f4e11] [cursor=pointer]
+  - main [ref=f4e16]:
+    - generic [ref=f4e17]:
+      - paragraph [ref=f4e18]: Calendrier
+      - heading "Calendrier" [level=1] [ref=f4e19]
+    - region "Novembre 2026" [ref=f4e36]:
+      - generic [ref=f4e37]:
+        - generic [ref=f4e38]:
+          - paragraph [ref=f4e39]: Dates enregistrées
+          - heading "Novembre 2026" [level=2] [ref=f4e40]
+        - generic [ref=f4e41]:
+          - button "Mois précédent" [ref=f4e42] [cursor=pointer]
+          - button "Mois suivant" [ref=f4e45] [cursor=pointer]
+      - generic [ref=f4e177]:
+        - generic [ref=f4e178]:
+          - heading "Ajouter plusieurs débuts" [level=3] [ref=f4e179]
+          - paragraph [ref=f4e180]: Choisis chaque date séparément; aucune plage continue ne sera sélectionnée.
+          - paragraph [ref=f4e181]: Les dates futures et les débuts déjà enregistrés sont désactivés.
+          - paragraph [ref=f4e182]: 0 débuts sélectionnés
+        - generic [ref=f4e183]:
+          - button "Annuler" [ref=f4e184] [cursor=pointer]
+          - button "Enregistrer 0 débuts" [disabled] [ref=f4e185]
+      - table "Calendrier pour novembre 2026" [ref=f4e50]:
+        - rowgroup [ref=f4e51]:
+          - row [ref=f4e52]:
+            - columnheader "lundi" [ref=f4e53]: lun.
+            - columnheader "mardi" [ref=f4e54]: mar.
+            - columnheader "mercredi" [ref=f4e55]: mer.
+            - columnheader "jeudi" [ref=f4e56]: jeu.
+            - columnheader "vendredi" [ref=f4e57]: ven.
+            - columnheader "samedi" [ref=f4e58]: sam.
+            - columnheader "dimanche" [ref=f4e59]: dim.
+        - rowgroup [ref=f4e60]:
+          - row [ref=f4e61]:
+            - cell [aria-hidden] [ref=f4e62]
+            - cell [aria-hidden] [ref=f4e63]
+            - cell [aria-hidden] [ref=f4e64]
+            - cell [aria-hidden] [ref=f4e65]
+            - cell [aria-hidden] [ref=f4e66]
+            - cell [aria-hidden] [ref=f4e67]
+            - cell [ref=f4e68]:
+              - button "1 novembre 2026" [ref=f4e186] [cursor=pointer]:
+                - generic [ref=f4e187]: "1"
+          - row [ref=f4e71]:
+            - cell [ref=f4e72]:
+              - button "2 novembre 2026" [ref=f4e188] [cursor=pointer]:
+                - generic [ref=f4e189]: "2"
+            - cell [ref=f4e75]:
+              - button "3 novembre 2026" [ref=f4e190] [cursor=pointer]:
+                - generic [ref=f4e191]: "3"
+            - cell [ref=f4e78]:
+              - button "4 novembre 2026" [ref=f4e192] [cursor=pointer]:
+                - generic [ref=f4e193]: "4"
+            - cell [ref=f4e81]:
+              - button "5 novembre 2026" [ref=f4e194] [cursor=pointer]:
+                - generic [ref=f4e195]: "5"
+            - cell [ref=f4e84]:
+              - button "6 novembre 2026" [ref=f4e196] [cursor=pointer]:
+                - generic [ref=f4e197]: "6"
+            - cell [ref=f4e87]:
+              - button "7 novembre 2026" [ref=f4e198] [cursor=pointer]:
+                - generic [ref=f4e199]: "7"
+            - cell [ref=f4e90]:
+              - button "8 novembre 2026" [ref=f4e200] [cursor=pointer]:
+                - generic [ref=f4e201]: "8"
+          - row [ref=f4e93]:
+            - cell [ref=f4e94]:
+              - button "9 novembre 2026" [ref=f4e202] [cursor=pointer]:
+                - generic [ref=f4e203]: "9"
+            - cell [ref=f4e97]:
+              - button "10 novembre 2026" [ref=f4e204] [cursor=pointer]:
+                - generic [ref=f4e205]: "10"
+            - cell [ref=f4e100]:
+              - button "11 novembre 2026" [ref=f4e206] [cursor=pointer]:
+                - generic [ref=f4e207]: "11"
+            - cell [ref=f4e103]:
+              - button "12 novembre 2026" [ref=f4e208] [cursor=pointer]:
+                - generic [ref=f4e209]: "12"
+            - cell [ref=f4e106]:
+              - button "13 novembre 2026" [ref=f4e210] [cursor=pointer]:
+                - generic [ref=f4e211]: "13"
+            - cell [ref=f4e109]:
+              - button "14 novembre 2026" [ref=f4e212] [cursor=pointer]:
+                - generic [ref=f4e213]: "14"
+            - cell [ref=f4e112]:
+              - button "15 novembre 2026" [ref=f4e214] [cursor=pointer]:
+                - generic [ref=f4e215]: "15"
+          - row [ref=f4e115]:
+            - cell [ref=f4e116]:
+              - button "16 novembre 2026" [ref=f4e216] [cursor=pointer]:
+                - generic [ref=f4e217]: "16"
+            - cell [ref=f4e119]:
+              - button "17 novembre 2026" [ref=f4e218] [cursor=pointer]:
+                - generic [ref=f4e219]: "17"
+            - cell [ref=f4e122]:
+              - button "18 novembre 2026" [ref=f4e220] [cursor=pointer]:
+                - generic [ref=f4e221]: "18"
+            - cell [ref=f4e125]:
+              - button "19 novembre 2026" [ref=f4e222] [cursor=pointer]:
+                - generic [ref=f4e223]: "19"
+            - cell [ref=f4e128]:
+              - button "20 novembre 2026" [ref=f4e224] [cursor=pointer]:
+                - generic [ref=f4e225]: "20"
+            - cell [ref=f4e131]:
+              - button "21 novembre 2026" [ref=f4e226] [cursor=pointer]:
+                - generic [ref=f4e227]: "21"
+            - cell [ref=f4e134]:
+              - button "22 novembre 2026" [ref=f4e228] [cursor=pointer]:
+                - generic [ref=f4e229]: "22"
+          - row [ref=f4e230]:
+            - cell [ref=f4e138]:
+              - button "23 novembre 2026" [ref=f4e231] [cursor=pointer]:
+                - generic [ref=f4e232]: "23"
+            - cell [ref=f4e141]:
+              - button "24 novembre 2026" [ref=f4e233] [cursor=pointer]:
+                - generic [ref=f4e234]: "24"
+            - cell [ref=f4e235]:
+              - button "25 novembre 2026, date future, non sélectionnable" [disabled] [ref=f4e236]:
+                - generic [ref=f4e237]: "25"
+            - cell [ref=f4e238]:
+              - button "26 novembre 2026, date future, non sélectionnable" [disabled] [ref=f4e239]:
+                - generic [ref=f4e240]: "26"
+            - cell [ref=f4e241]:
+              - button "27 novembre 2026, date future, non sélectionnable" [disabled] [ref=f4e242]:
+                - generic [ref=f4e243]: "27"
+            - cell [ref=f4e244]:
+              - button "28 novembre 2026, date future, non sélectionnable" [disabled] [ref=f4e245]:
+                - generic [ref=f4e246]: "28"
+            - cell [ref=f4e247]:
+              - button "29 novembre 2026, date future, non sélectionnable" [disabled] [ref=f4e248]:
+                - generic [ref=f4e249]: "29"
+          - row [ref=f4e250]:
+            - cell [ref=f4e251]:
+              - button "30 novembre 2026, date future, non sélectionnable" [disabled] [ref=f4e252]:
+                - generic [ref=f4e253]: "30"
+            - cell [aria-hidden] [ref=f4e163]
+            - cell [aria-hidden] [ref=f4e164]
+            - cell [aria-hidden] [ref=f4e165]
+            - cell [aria-hidden] [ref=f4e166]
+            - cell [aria-hidden] [ref=f4e167]
+            - cell [aria-hidden] [ref=f4e168]
+      - status [ref=f4e169]
+      - list "Légende du calendrier" [ref=f4e170]:
+        - listitem [ref=f4e171]: Aujourd’hui
+        - listitem [ref=f4e173]: Début enregistré
+  - navigation "Navigation principale" [ref=f4e21]:
+    - button "Accueil" [ref=f4e22] [cursor=pointer]
+    - button "Calendrier" [ref=f4e27] [cursor=pointer]
+    - button "Réglages" [ref=f4e31] [cursor=pointer]

@@ -1,0 +1,46 @@
+- generic [ref=f8e3]:
+  - link "Aller au contenu" [ref=f8e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f8e5]:
+    - generic [ref=f8e6]:
+      - generic [aria-hidden] [ref=f8e7]: P
+      - generic [ref=f8e8]:
+        - paragraph [ref=f8e9]: PeriodPeriods
+        - paragraph [ref=f8e10]: Suivi des règles, sans compte.
+    - button "Passer au thème sombre" [ref=f8e11] [cursor=pointer]
+  - main [ref=f8e16]:
+    - generic [ref=f8e17]:
+      - paragraph [ref=f8e18]: Accueil
+      - heading "Suivi des règles et du cycle" [level=1] [ref=f8e19]
+    - generic [ref=f8e20]:
+      - region "Enregistrer un début de règles" [ref=f8e22]:
+        - generic [ref=f8e23]:
+          - paragraph [ref=f8e24]: Ajouter une date
+          - heading "Enregistrer un début de règles" [level=2] [ref=f8e25]
+          - paragraph [ref=f8e26]: Choisis aujourd’hui ou une date passée. Tes informations restent sur cet appareil.
+        - generic [ref=f8e27]:
+          - generic [ref=f8e28]:
+            - generic [ref=f8e29]: Premier jour des règles
+            - 'button "Premier jour des règles : 24 novembre 2026 Choisir une autre date" [ref=f8e31] [cursor=pointer]':
+              - generic [ref=f8e32]: "Premier jour des règles :"
+              - generic [ref=f8e33]: 24 novembre 2026
+              - generic [ref=f8e34]: Choisir une autre date
+            - paragraph [ref=f8e35]: Le calendrier commence à aujourd’hui. Choisis aujourd’hui ou une date passée.
+          - button "Choisir une date" [ref=f8e36] [cursor=pointer]
+        - status [ref=f8e37]
+      - group [ref=f8e38]:
+        - generic "Comprendre l’estimation" [ref=f8e39] [cursor=pointer]
+      - region "Commence par une date." [ref=f8e40]:
+        - generic [ref=f8e46]:
+          - heading "Commence par une date." [level=2] [ref=f8e47]
+          - paragraph [ref=f8e48]: Plusieurs dates seront nécessaires avant d’afficher une estimation.
+      - region "Historique des intervalles" [ref=f8e49]:
+        - generic [ref=f8e50]:
+          - paragraph [ref=f8e51]: Tes dates enregistrées
+          - heading "Historique des intervalles" [level=2] [ref=f8e52]
+        - paragraph [ref=f8e53]: Un intervalle mesure les jours entre deux débuts successifs, pas la durée des règles.
+        - paragraph [ref=f8e54]: Enregistre deux débuts passés pour afficher les intervalles entre eux.
+  - navigation "Navigation principale" [ref=f8e55]:
+    - button "Accueil" [ref=f8e56] [cursor=pointer]
+    - button "Calendrier" [ref=f8e61] [cursor=pointer]
+    - button "Réglages" [ref=f8e65] [cursor=pointer]

@@ -1,0 +1,186 @@
+- generic [ref=e3]:
+  - link "Aller au contenu" [ref=e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - generic [aria-hidden] [ref=e7]: P
+      - generic [ref=e8]:
+        - paragraph [ref=e9]: PeriodPeriods
+        - paragraph [ref=e10]: Suivi des règles, sans compte.
+    - button "Passer au thème sombre" [ref=e242] [cursor=pointer]
+  - generic [ref=e15]:
+    - main [ref=e16]:
+      - generic [ref=e17]:
+        - paragraph [ref=e18]: Calendrier
+        - heading "Calendrier" [active] [level=1] [ref=e281]
+      - region "Novembre 2026" [ref=e282]:
+        - generic [ref=e283]:
+          - generic [ref=e284]:
+            - paragraph [ref=e285]: Dates enregistrées
+            - heading "Novembre 2026" [level=2] [ref=e286]
+          - generic [ref=e287]:
+            - button "Mois précédent" [ref=e288] [cursor=pointer]
+            - button "Mois suivant" [ref=e291] [cursor=pointer]
+        - button "Ajouter plusieurs débuts" [ref=e295] [cursor=pointer]
+        - table "Calendrier pour novembre 2026" [ref=e296]:
+          - rowgroup [ref=e297]:
+            - row [ref=e298]:
+              - columnheader "lundi" [ref=e299]: lun.
+              - columnheader "mardi" [ref=e300]: mar.
+              - columnheader "mercredi" [ref=e301]: mer.
+              - columnheader "jeudi" [ref=e302]: jeu.
+              - columnheader "vendredi" [ref=e303]: ven.
+              - columnheader "samedi" [ref=e304]: sam.
+              - columnheader "dimanche" [ref=e305]: dim.
+          - rowgroup [ref=e306]:
+            - row [ref=e307]:
+              - cell [aria-hidden] [ref=e308]
+              - cell [aria-hidden] [ref=e309]
+              - cell [aria-hidden] [ref=e310]
+              - cell [aria-hidden] [ref=e311]
+              - cell [aria-hidden] [ref=e312]
+              - cell [aria-hidden] [ref=e313]
+              - cell [ref=e314]:
+                - time [ref=e315]:
+                  - generic [ref=e316]: "1"
+            - row [ref=e317]:
+              - cell [ref=e318]:
+                - time [ref=e319]:
+                  - generic [ref=e320]: "2"
+              - cell [ref=e321]:
+                - time [ref=e322]:
+                  - generic [ref=e323]: "3"
+              - cell [ref=e324]:
+                - time [ref=e325]:
+                  - generic [ref=e326]: "4"
+              - cell [ref=e327]:
+                - time [ref=e328]:
+                  - generic [ref=e329]: "5"
+              - cell [ref=e330]:
+                - time [ref=e331]:
+                  - generic [ref=e332]: "6"
+              - cell [ref=e333]:
+                - time [ref=e334]:
+                  - generic [ref=e335]: "7"
+              - cell [ref=e336]:
+                - time [ref=e337]:
+                  - generic [ref=e338]: "8"
+            - row [ref=e339]:
+              - cell [ref=e340]:
+                - time [ref=e341]:
+                  - generic [ref=e342]: "9"
+              - cell [ref=e343]:
+                - time [ref=e344]:
+                  - generic [ref=e345]: "10"
+              - cell [ref=e346]:
+                - time [ref=e347]:
+                  - generic [ref=e348]: "11"
+              - cell [ref=e349]:
+                - time [ref=e350]:
+                  - generic [ref=e351]: "12"
+              - cell [ref=e352]:
+                - time [ref=e353]:
+                  - generic [ref=e354]: "13"
+              - cell [ref=e355]:
+                - time [ref=e356]:
+                  - generic [ref=e357]: "14"
+              - cell [ref=e358]:
+                - time [ref=e359]:
+                  - generic [ref=e360]: "15"
+            - row [ref=e361]:
+              - cell [ref=e362]:
+                - time [ref=e363]:
+                  - generic [ref=e364]: "16"
+              - cell [ref=e365]:
+                - time [ref=e366]:
+                  - generic [ref=e367]: "17"
+              - cell [ref=e368]:
+                - time [ref=e369]:
+                  - generic [ref=e370]: "18"
+              - cell [ref=e371]:
+                - time [ref=e372]:
+                  - generic [ref=e373]: "19"
+              - cell [ref=e374]:
+                - time [ref=e375]:
+                  - generic [ref=e376]: "20"
+              - cell [ref=e377]:
+                - time [ref=e378]:
+                  - generic [ref=e379]: "21"
+              - cell [ref=e380]:
+                - time [ref=e381]:
+                  - generic [ref=e382]: "22"
+            - row [ref=e383]:
+              - cell [ref=e384]:
+                - time [ref=e385]:
+                  - generic [ref=e386]: "23"
+              - cell [ref=e387]:
+                - time [ref=e388]:
+                  - generic [ref=e389]: "24"
+              - cell [ref=e390]:
+                - time [ref=e391]:
+                  - generic [ref=e392]: "25"
+              - cell [ref=e393]:
+                - time [ref=e394]:
+                  - generic [ref=e395]: "26"
+              - cell [ref=e396]:
+                - time [ref=e397]:
+                  - generic [ref=e398]: "27"
+              - cell [ref=e399]:
+                - time [ref=e400]:
+                  - generic [ref=e401]: "28"
+              - cell [ref=e402]:
+                - time [ref=e403]:
+                  - generic [ref=e404]: "29"
+            - row [ref=e405]:
+              - cell [ref=e406]:
+                - time [ref=e407]:
+                  - generic [ref=e408]: "30"
+              - cell [aria-hidden] [ref=e409]
+              - cell [aria-hidden] [ref=e410]
+              - cell [aria-hidden] [ref=e411]
+              - cell [aria-hidden] [ref=e412]
+              - cell [aria-hidden] [ref=e413]
+              - cell [aria-hidden] [ref=e414]
+        - status [ref=e415]
+        - list "Légende du calendrier" [ref=e416]:
+          - listitem [ref=e417]: Aujourd’hui
+          - listitem [ref=e419]: Début enregistré
+        - paragraph [ref=e422]: Aucune date de début enregistrée pour ce mois.
+    - generic [aria-hidden]:
+      - generic:
+        - paragraph: Accueil
+        - heading [level=1]: Suivi des règles et du cycle
+      - generic:
+        - generic:
+          - region:
+            - generic:
+              - paragraph: Ajouter une date
+              - heading [level=2]: Enregistrer un début de règles
+              - paragraph: Choisis aujourd’hui ou une date passée. Tes informations restent sur cet appareil.
+            - generic:
+              - generic:
+                - generic: Premier jour des règles
+                - generic:
+                  - button:
+                    - generic: "Premier jour des règles :"
+                    - generic: 24 novembre 2026
+                    - generic: Choisir une autre date
+                - paragraph: Le calendrier commence à aujourd’hui. Choisis aujourd’hui ou une date passée.
+              - button: Choisir une date
+            - status
+        - group:
+          - generic: Comprendre l’estimation
+        - region:
+          - generic:
+            - heading [level=2]: Commence par une date.
+            - paragraph: Plusieurs dates seront nécessaires avant d’afficher une estimation.
+        - region:
+          - generic:
+            - paragraph: Tes dates enregistrées
+            - heading [level=2]: Historique des intervalles
+          - paragraph: Un intervalle mesure les jours entre deux débuts successifs, pas la durée des règles.
+          - paragraph: Enregistre deux débuts passés pour afficher les intervalles entre eux.
+  - navigation "Navigation principale" [ref=e21]:
+    - button "Accueil" [ref=e22] [cursor=pointer]
+    - button "Calendrier" [ref=e27] [cursor=pointer]
+    - button "Réglages" [ref=e31] [cursor=pointer]

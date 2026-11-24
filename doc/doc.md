@@ -26,6 +26,12 @@ Aussi, en parcourant les papiers scientifiques, il semblerait qu'il y ait largem
 - plus largement, toutes les phases (sous forme d'estimations, cela me semble plus simple)
 - optionnelement enlever la possibilité de sélectionner plusieurs dates de début à la fois
 - Améliorer la méthode de stockage
+
+## Décisions UI
+- Choisir quelques dizaines d'images
+- Si besoin reconnaissance des polices (WhatTheFont)
+- Moèle de vision
+
 ## Sources
 
 [1]<https://pmc.ncbi.nlm.nih.gov/articles/PMC8504278/>

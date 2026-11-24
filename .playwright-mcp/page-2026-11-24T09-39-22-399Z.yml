@@ -1,0 +1,19 @@
+- generic [ref=f3e3]:
+  - link "Aller au contenu" [ref=f3e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f3e5]:
+    - generic [ref=f3e6]:
+      - generic [aria-hidden] [ref=f3e7]: P
+      - generic [ref=f3e8]:
+        - paragraph [ref=f3e9]: PeriodPeriods
+        - paragraph [ref=f3e10]: Suivi des règles, sans compte.
+    - button "Passer au thème sombre" [ref=f3e11] [cursor=pointer]
+  - main [ref=f3e16]:
+    - generic [ref=f3e17]:
+      - paragraph [ref=f3e18]: Accueil
+      - heading "Suivi des règles et du cycle" [level=1] [ref=f3e19]
+    - status [ref=f3e20]: Chargement de tes dates…
+  - navigation "Navigation principale" [ref=f3e21]:
+    - button "Accueil" [ref=f3e22] [cursor=pointer]
+    - button "Calendrier" [ref=f3e27] [cursor=pointer]
+    - button "Réglages" [ref=f3e31] [cursor=pointer]
