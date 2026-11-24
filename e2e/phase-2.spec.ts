@@ -19,15 +19,12 @@ test('enregistre localement un début et le retrouve après rechargement dans le
   await page.keyboard.press('Tab')
   await expect(page.getByRole('link', { name: 'Aller au contenu' })).toBeFocused()
   await page.keyboard.press('Tab')
-  await expect(page.getByRole('button', { name: 'Passer au thème sombre' })).toBeFocused()
-  await page.keyboard.press('Tab')
   await expect(page.getByRole('button', { name: 'Mois précédent' })).toBeFocused()
   await recordStart(page, '2025-03-12')
-  await expect(page.getByText('12 mars 2025')).toHaveAttribute('datetime', '2025-03-12')
+  const calendar = page.getByRole('table', { name: 'Calendrier pour mars 2025' })
+  await expect(calendar.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
 
   await page.reload()
-  await expect(page.getByText('12 mars 2025')).toHaveAttribute('datetime', '2025-03-12')
-  const calendar = page.getByRole('table', { name: 'Calendrier pour mars 2025' })
   await expect(calendar.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
   const pageWidth = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,

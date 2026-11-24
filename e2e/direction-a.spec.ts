@@ -48,7 +48,9 @@ test('keeps estimate context, logging, and calendar markers clear on mobile', as
   const calendarAccessibility = await new AxeBuilder({ page }).analyze()
   expect(calendarAccessibility.violations).toEqual([])
 
+  await page.getByRole('button', { name: 'Réglages' }).click()
   await page.getByRole('button', { name: 'Passer au thème sombre' }).click()
+  await page.getByRole('button', { name: 'Accueil' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   const darkAccessibility = await new AxeBuilder({ page }).analyze()
   expect(darkAccessibility.violations).toEqual([])

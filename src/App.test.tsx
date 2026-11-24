@@ -108,7 +108,9 @@ describe('PeriodPeriods app', () => {
       { startDate: '2025-03-16' },
     ])
 
-    expect(document.querySelector('.latest-period-date')).toHaveAttribute('datetime', '2025-03-16')
+    expect(within(calendar).getByLabelText('Début enregistré le 16 mars 2025')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Dernier début enregistré' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ouvrir le calendrier' })).not.toBeInTheDocument()
   })
 
   it('shows the median and its uncertainty after three intervals and marks the estimate in the calendar', async () => {
@@ -193,6 +195,7 @@ describe('PeriodPeriods app', () => {
 
     const explanation = await screen.findByText('Comprendre l’estimation')
     expect(screen.getByRole('table', { name: 'Calendrier pour mars 2025' })).toAppearBefore(explanation)
+    expect(screen.getByRole('heading', { name: 'Historique des intervalles' })).toAppearBefore(explanation)
     expect(explanation.closest('details')).not.toHaveAttribute('open')
     await user.click(explanation)
 
@@ -252,8 +255,6 @@ describe('PeriodPeriods app', () => {
     await user.tab()
     expect(screen.getByRole('link', { name: 'Aller au contenu' })).toHaveFocus()
     await user.tab()
-    expect(screen.getByRole('button', { name: 'Passer au thème sombre' })).toHaveFocus()
-    await user.tab()
     expect(screen.getByRole('button', { name: 'Mois précédent' })).toHaveFocus()
     expect(addButton).toBeInTheDocument()
     await user.click(statsButton)
@@ -284,7 +285,10 @@ describe('PeriodPeriods app', () => {
     const user = userEvent.setup()
     render(<App store={store} today="2025-03-20" />)
 
-    const darkThemeButton = await screen.findByRole('button', { name: 'Passer au thème sombre' })
+    expect(screen.queryByRole('button', { name: 'Passer au thème sombre' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Réglages' }))
+    const preferences = await screen.findByRole('region', { name: 'Préférences' })
+    const darkThemeButton = within(preferences).getByRole('button', { name: 'Passer au thème sombre' })
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
     await user.click(darkThemeButton)
 

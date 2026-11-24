@@ -1,9 +1,9 @@
-import { ChevronRight, LockKeyhole } from 'lucide-react'
+import { LockKeyhole } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { CivilDate, Period } from '../../domain/periods'
 import type { PeriodStartEstimate } from '../../domain/forecast/estimate-next-period'
 import { CycleHistoryView } from '../history/CycleHistoryView'
-import { formatCivilDate, formatCivilMonthDay, type Locale } from '../shared/format-civil-date'
+import { formatCivilMonthDay, type Locale } from '../shared/format-civil-date'
 
 type PeriodEntryViewProps = {
   readonly locale?: Locale
@@ -11,7 +11,6 @@ type PeriodEntryViewProps = {
   estimate: PeriodStartEstimate
   today: CivilDate
   saveMessage: string | null
-  onOpenCalendar: () => void
   calendar: ReactNode
 }
 
@@ -20,55 +19,36 @@ export function PeriodEntryView({
   estimate,
   today,
   saveMessage,
-  onOpenCalendar,
   calendar,
   locale = 'fr',
 }: PeriodEntryViewProps) {
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
-  const latestPeriod = periods.at(-1)
   const hasRecordedDates = periods.length > 0
 
   return (
-    <div className="view-stack home-layout" lang={locale}>
-      <div className={`home-lead${hasRecordedDates ? ' has-cycle-status' : ''}`}>
-        {hasRecordedDates &&
-          (estimate.kind === 'insufficient' ? (
-            <section className="forecast-empty" aria-labelledby="forecast-empty-title">
-              <p className="section-label">{text('Estimation personnelle', 'Personal estimate')}</p>
-              <h2 id="forecast-empty-title">{text('Pas encore assez de dates.', 'Not enough dates yet.')}</h2>
-              <p>
-                {text(
-                  'Continue à noter les débuts; une estimation apparaîtra après trois intervalles.',
-                  'Keep recording period starts. An estimate will appear after three intervals.',
-                )}
-              </p>
-            </section>
-          ) : (
-            <ForecastView estimate={estimate} locale={locale} />
-          ))}
-      </div>
+    <div className="home-layout" lang={locale}>
+      {hasRecordedDates &&
+        (estimate.kind === 'insufficient' ? (
+          <section className="forecast-empty" aria-labelledby="forecast-empty-title">
+            <p className="section-label">{text('Estimation personnelle', 'Personal estimate')}</p>
+            <h2 id="forecast-empty-title">{text('Pas encore assez de dates.', 'Not enough dates yet.')}</h2>
+            <p>
+              {text(
+                'Continue à noter les débuts; une estimation apparaîtra après trois intervalles.',
+                'Keep recording period starts. An estimate will appear after three intervals.',
+              )}
+            </p>
+          </section>
+        ) : (
+          <ForecastView estimate={estimate} locale={locale} />
+        ))}
 
       {calendar}
-      <EstimateMethodDetails locale={locale} />
+      <p className="home-save-status form-feedback-success" role="status">
+        {saveMessage}
+      </p>
 
-      {latestPeriod ? (
-        <section className="latest-period" aria-labelledby="latest-period-title">
-          <div>
-            <p className="section-label">{text('Historique', 'History')}</p>
-            <h2 id="latest-period-title">{text('Dernier début enregistré', 'Last recorded period start')}</h2>
-          </div>
-          <time className="latest-period-date" dateTime={latestPeriod.startDate}>
-            {formatCivilDate(latestPeriod.startDate, locale)}
-          </time>
-          <button
-            className="text-button inline-flex items-center justify-center gap-period-2"
-            type="button"
-            onClick={onOpenCalendar}
-          >
-            {text('Ouvrir le calendrier', 'Open calendar')} <ChevronRight size={16} aria-hidden="true" />
-          </button>
-        </section>
-      ) : (
+      {!hasRecordedDates && (
         <section className="first-use-note" aria-labelledby="history-title">
           <div className="note-icon" aria-hidden="true">
             <LockKeyhole size={18} />
@@ -86,9 +66,7 @@ export function PeriodEntryView({
       )}
 
       <CycleHistoryView periods={periods} today={today} locale={locale} />
-      <p className={saveMessage ? 'form-feedback-success' : 'visually-hidden'} role="status">
-        {saveMessage}
-      </p>
+      <EstimateMethodDetails locale={locale} />
     </div>
   )
 }

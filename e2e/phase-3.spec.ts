@@ -61,11 +61,11 @@ test('présente l’historique complet et explique la médiane sur un petit écr
     content: document.documentElement.scrollWidth,
   }))
   expect(pageWidth.content).toBeLessThanOrEqual(pageWidth.viewport)
-  const latestHeading = await page.getByRole('heading', { name: 'Dernier début enregistré' }).boundingBox()
-  const latestDate = await page.locator('.latest-period-date').boundingBox()
-  expect(latestHeading).not.toBeNull()
-  expect(latestDate).not.toBeNull()
-  expect(latestDate!.y - latestHeading!.y).toBeLessThan(100)
+  const historyBounds = await history.boundingBox()
+  const methodBounds = await methodSummary.boundingBox()
+  expect(historyBounds).not.toBeNull()
+  expect(methodBounds).not.toBeNull()
+  expect(methodBounds!.y).toBeGreaterThan(historyBounds!.y + historyBounds!.height)
 
   const accessibility = await new AxeBuilder({ page }).analyze()
   expect(accessibility.violations).toEqual([])

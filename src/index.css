@@ -22,6 +22,9 @@
 
 :root {
   color-scheme: light;
+  /* Leave room for the floating Add button and navigation when focus scrolls into view. */
+  --bottom-controls-clearance: calc(7.8rem + env(safe-area-inset-bottom));
+  scroll-padding-block-end: var(--bottom-controls-clearance);
   --color-canvas: #f4f1e9;
   --color-surface: #fffefa;
   --color-surface-soft: #ece6dd;
@@ -103,7 +106,7 @@ summary:focus-visible {
 }
 .app-shell {
   min-height: 100svh;
-  padding-bottom: calc(7.8rem + env(safe-area-inset-bottom));
+  padding-bottom: var(--bottom-controls-clearance);
 }
 .app-header,
 .main-stage {
@@ -116,7 +119,6 @@ summary:focus-visible {
   overflow-x: clip;
 }
 .app-header {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -129,7 +131,6 @@ summary:focus-visible {
   margin: 0;
 }
 .brand-name {
-  max-width: calc(100% - 3.5rem);
   color: var(--color-ink);
   font-family: var(--font-display);
   font-size: clamp(1.55rem, 6vw, 2.25rem);
@@ -159,11 +160,6 @@ summary:focus-visible {
   font-weight: 650;
   white-space: nowrap;
 }
-.app-header .theme-toggle {
-  position: absolute;
-  top: max(1.2rem, env(safe-area-inset-top));
-  right: 0;
-}
 .theme-toggle:hover {
   border-color: var(--color-accent-deep);
   background: var(--color-accent-soft);
@@ -177,6 +173,9 @@ summary:focus-visible {
 .view-heading {
   min-width: 0;
   max-width: 31rem;
+}
+.view-heading-home {
+  max-width: 52rem;
 }
 .eyebrow,
 .section-label {
@@ -223,12 +222,25 @@ h2 {
   margin-top: 2.25rem;
 }
 .home-layout {
-  display: grid;
-  gap: 2.25rem;
+  margin-block-start: var(--space-4);
 }
-.home-lead {
-  display: grid;
-  gap: 1.5rem;
+.home-layout > .calendar-section,
+.home-layout > .cycle-history-section {
+  margin-block-start: clamp(var(--space-5), 4vw, var(--space-6));
+}
+.home-layout > .calendar-section:first-child {
+  margin-block-start: 0;
+}
+.home-layout > .cycle-history-section {
+  padding-block: 0 var(--space-3);
+  border-block-end: 0;
+}
+.home-save-status {
+  margin: var(--space-3) 0 0;
+}
+.home-save-status:empty,
+.calendar-section .form-feedback:empty {
+  position: absolute;
 }
 .field-group label,
 .field-group .field-label {
@@ -459,21 +471,14 @@ h2 {
 .form-feedback-success {
   color: var(--color-accent-deep);
 }
-.latest-period,
 .first-use-note {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding-top: 1.25rem;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-block-start: var(--space-5);
+  padding-block-start: var(--space-3);
   border-top: 1px solid var(--color-line);
 }
-.latest-period {
-  flex-wrap: wrap;
-}
-.latest-period > div {
-  flex: 1 1 12rem;
-}
-.latest-period h2,
 .first-use-note h2 {
   margin: 0;
   font-family: var(--font-body);
@@ -481,18 +486,8 @@ h2 {
   font-weight: 700;
   letter-spacing: 0;
 }
-.latest-period-date {
-  color: var(--color-accent-deep);
-  font-family: var(--font-display);
-  font-size: clamp(1.6rem, 6vw, 2.15rem);
-  font-weight: 540;
-  letter-spacing: -0.03em;
-}
-.first-use-note {
-  align-items: flex-start;
-}
 .first-use-note p {
-  margin: 0.35rem 0 0;
+  margin: var(--space-1) 0 0;
   color: var(--color-muted);
   line-height: 1.5;
 }
@@ -590,8 +585,8 @@ h2 {
   align-items: end;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1.4rem;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
 }
 .calendar-heading > div:first-child {
   min-width: 0;
@@ -842,8 +837,8 @@ h2 {
 .calendar-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem 1rem;
-  margin: 0.9rem 0 0;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-3) 0 0;
   padding: 0;
   color: var(--color-muted);
   font-size: 0.875rem;
@@ -873,8 +868,8 @@ h2 {
   border-block: 1px solid var(--color-line);
 }
 .method-explanation summary {
-  min-height: 3rem;
-  padding-block: 0.8rem;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-1);
   color: var(--color-accent-deep);
   cursor: pointer;
   font-weight: 650;
@@ -883,8 +878,8 @@ h2 {
   color: var(--color-ink);
 }
 .method-explanation-copy {
-  max-width: 38rem;
-  padding: 0.1rem 0 1rem;
+  max-width: 68ch;
+  padding: 0 var(--space-1) var(--space-3);
   color: var(--color-muted);
   line-height: 1.55;
 }
@@ -1039,6 +1034,10 @@ h2 {
 .settings-preferences label {
   font-weight: 650;
   margin-top: 0.7rem;
+}
+.settings-preferences .theme-toggle {
+  justify-self: start;
+  margin-block-start: var(--space-2);
 }
 .settings-preferences select {
   width: 100%;
@@ -1308,22 +1307,8 @@ h2 {
   .app-header {
     padding-top: 2rem;
   }
-  .app-header .theme-toggle {
-    top: 2rem;
-  }
   .main-content {
     padding-top: 3.25rem;
-  }
-}
-@media (min-width: 58rem) {
-  .home-lead.has-cycle-status {
-    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-    align-items: start;
-    gap: 2rem;
-  }
-  .home-lead.has-cycle-status .forecast-section,
-  .home-lead.has-cycle-status .forecast-empty {
-    max-width: none;
   }
 }
 @media (max-width: 520px) {
@@ -1335,9 +1320,6 @@ h2 {
   }
   .view-stack {
     margin-top: 1.75rem;
-  }
-  .home-lead {
-    gap: 1rem;
   }
   .forecast-section,
   .forecast-empty {
@@ -1351,28 +1333,6 @@ h2 {
   }
   .form-feedback {
     margin-top: 0.5rem;
-  }
-  .latest-period {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .latest-period > div {
-    flex: 0 1 auto;
-  }
-  .theme-toggle {
-    width: 2.75rem;
-    padding-inline: 0;
-  }
-  .theme-toggle-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
   }
   .calendar-table td {
     height: 3.4rem;

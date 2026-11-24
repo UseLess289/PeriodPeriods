@@ -229,7 +229,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
   function renderPageContent(view: View, isActive: boolean) {
     return (
       <>
-        <div className="view-heading">
+        <div className={view === 'home' ? 'view-heading view-heading-home' : 'view-heading'}>
           <p className="eyebrow">
             {locale === 'en' ? { home: 'Home', stats: 'Statistics', settings: 'Settings' }[view] : views[view].label}
           </p>
@@ -276,7 +276,6 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
             estimate={estimate!}
             today={today}
             saveMessage={saveMessage}
-            onOpenCalendar={() => document.getElementById('calendar-month-title')?.scrollIntoView()}
             calendar={
               <PeriodCalendarView
                 periods={periods}
@@ -317,6 +316,14 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
                 <option value="1">{locale === 'en' ? 'Monday' : 'Lundi'}</option>
                 <option value="0">{locale === 'en' ? 'Sunday' : 'Dimanche'}</option>
               </select>
+              <button
+                className="theme-toggle"
+                type="button"
+                onClick={() => setTheme((current) => (current === 'light' ? 'dark' : 'light'))}
+              >
+                {theme === 'light' ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
+                {themeActionLabel}
+              </button>
               <p role="status">{saveMessage}</p>
             </section>
             <BackupSettingsView store={store} onImported={refreshImportedData} locale={locale} />
@@ -334,16 +341,6 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
 
       <header className="app-header">
         <p className="brand-name">PeriodPeriods</p>
-        <button
-          className="theme-toggle"
-          type="button"
-          aria-label={themeActionLabel}
-          title={themeActionLabel}
-          onClick={() => setTheme((current) => (current === 'light' ? 'dark' : 'light'))}
-        >
-          {theme === 'light' ? <Moon size={18} aria-hidden="true" /> : <Sun size={18} aria-hidden="true" />}
-          <span className="theme-toggle-label">{themeActionLabel}</span>
-        </button>
       </header>
 
       <div className="main-stage">

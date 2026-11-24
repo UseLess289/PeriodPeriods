@@ -10,7 +10,7 @@ test('enregistre une période complète et la complète depuis la fenêtre de sa
   await dialog.getByLabel('Symptômes (séparés par des virgules)').fill('fatigue, crampes')
   await dialog.getByRole('button', { name: 'Enregistrer' }).click()
   await expect(dialog).not.toBeVisible()
-  await expect(page.locator('.latest-period-date')).toHaveAttribute('datetime', '2025-03-12')
+  await expect(page.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
 
   await page.getByRole('button', { name: 'Ajouter un événement' }).click()
   const editing = page.getByRole('dialog')
@@ -44,7 +44,7 @@ test('importe les jours Flo en conservant les réglages et signale les doublons'
   await expect(page.getByText(/Débuts déjà présents/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Confirmer l’ajout' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Accueil' }).click()
-  await expect(page.locator('.latest-period-date')).toHaveAttribute('datetime', '2025-02-26')
+  await expect(page.getByText('26 février 2025', { exact: true })).toHaveAttribute('datetime', '2025-02-26')
   await expect(
     page
       .getByRole('table', { name: /Calendrier pour/ })

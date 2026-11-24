@@ -227,7 +227,7 @@ test('le bouton Ajouter ouvre la saisie, qui accepte une date passée et gère l
   await expect(add).toBeFocused()
 
   await recordStart(page, '2025-03-12')
-  await expect(page.locator('.latest-period-date')).toHaveAttribute('datetime', '2025-03-12')
+  await expect(page.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
 })
 
 test('sélectionne plusieurs débuts distincts, bloque les doublons et les dates futures', async ({ page }) => {
@@ -312,7 +312,7 @@ test('exporte un fichier v1 et l’import valide remplace les dates et réglages
   await page.getByRole('button', { name: 'Remplacer les données actuelles' }).click()
   await expect(page.locator('#backup-import-status')).toContainText('Sauvegarde importée.')
   await page.getByRole('button', { name: 'Accueil' }).click()
-  await expect(page.locator('.latest-period-date')).toHaveAttribute('datetime', '2025-03-27')
+  await expect(page.getByLabel('Début enregistré le 27 mars 2025')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Prochain début estimé' })).toBeVisible()
   await expect(page.getByText('24 avril', { exact: true })).toHaveAttribute('datetime', '2025-04-24')
 
@@ -336,7 +336,7 @@ test('un fichier invalide ou un import annulé ne modifie pas les données actue
   const invalidBackupAccessibility = await new AxeBuilder({ page }).analyze()
   expect(invalidBackupAccessibility.violations).toEqual([])
   await page.getByRole('button', { name: 'Accueil' }).click()
-  await expect(page.locator('.latest-period-date')).toHaveAttribute('datetime', '2025-03-12')
+  await expect(page.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
 
   await page.getByRole('button', { name: 'Réglages' }).click()
   await page.locator('#period-backup-file').setInputFiles({
@@ -348,7 +348,7 @@ test('un fichier invalide ou un import annulé ne modifie pas les données actue
   await page.getByRole('button', { name: 'Annuler l’import' }).click()
   await expect(page.locator('#backup-import-status')).toContainText('Import annulé.')
   await page.getByRole('button', { name: 'Accueil' }).click()
-  await expect(page.locator('.latest-period-date')).toHaveAttribute('datetime', '2025-03-12')
+  await expect(page.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
   const accessibility = await new AxeBuilder({ page }).analyze()
   expect(accessibility.violations).toEqual([])
 })
@@ -383,10 +383,12 @@ test('reste dans la largeur aux tailles cibles et conserve thèmes, contraste et
   }
 
   await page.emulateMedia({ colorScheme: 'dark', contrast: 'more', reducedMotion: 'reduce' })
+  await page.getByRole('button', { name: 'Réglages' }).click()
   await page.getByRole('button', { name: 'Passer au thème sombre' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   const darkAccessibility = await new AxeBuilder({ page }).analyze()
   expect(darkAccessibility.violations).toEqual([])
+  await page.getByRole('button', { name: 'Accueil' }).click()
 
   const reducedMotionDuration = await page
     .getByRole('button', { name: 'Statistiques', exact: true })
