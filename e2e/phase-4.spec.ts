@@ -108,6 +108,18 @@ async function swipeFrom(page: Page, selector: string, startX: number, endX: num
   )
 }
 
+async function tapWithTouch(page: Page, selector: string) {
+  const bounds = await page.locator(selector).boundingBox()
+  expect(bounds).not.toBeNull()
+  const touch = await page.context().newCDPSession(page)
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 }],
+  })
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await touch.detach()
+}
+
 test('navigue par balayage, respecte les gestes verticaux et restaure l’historique', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
   await page.goto('/')
@@ -183,6 +195,63 @@ test('navigue par balayage, respecte les gestes verticaux et restaure l’histor
   await expect(page).not.toHaveURL(/\?view=calendar$/)
 })
 
+test('change le mois par balayage sans changer de section ni sélectionner une date', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
+  await page.goto('/?view=calendar')
+
+  await expect(page.getByRole('heading', { name: 'Mars 2025' })).toBeVisible()
+  await swipeFrom(page, '.calendar-table', 300, 140, 320, 320)
+  await expect(page.getByRole('heading', { name: 'Avril 2025' })).toBeVisible()
+  await expect(page).toHaveURL(/\?view=calendar$/)
+
+  await swipeFrom(page, '.calendar-table', 140, 300, 320, 320)
+  await expect(page.getByRole('heading', { name: 'Mars 2025' })).toBeVisible()
+
+  await swipeFrom(page, '.calendar-table', 200, 195, 320, 430)
+  await expect(page.getByRole('heading', { name: 'Mars 2025' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Ajouter plusieurs débuts' }).click()
+  await tapWithTouch(page, 'button.calendar-date-choice[aria-label="1 mars 2025"]')
+  await expect(page.locator('.selection-count')).toHaveText('1 début sélectionné')
+
+  const selectedDate = page.locator('button.calendar-date-choice[aria-label^="1 mars 2025"]')
+  await selectedDate.evaluate((element) => {
+    element.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 45,
+        pointerType: 'touch',
+        isPrimary: true,
+        button: 0,
+        clientX: 300,
+        clientY: 320,
+      }),
+    )
+  })
+  await page.clock.runFor(100)
+  await selectedDate.evaluate((element) => {
+    const pointerOptions = {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 45,
+      pointerType: 'touch',
+      isPrimary: true,
+      button: 0,
+      clientY: 320,
+    }
+    element.dispatchEvent(new PointerEvent('pointermove', { ...pointerOptions, clientX: 285 }))
+    element.dispatchEvent(new PointerEvent('pointerup', { ...pointerOptions, clientX: 285 }))
+    element.click()
+  })
+  await expect(page.locator('.selection-count')).toHaveText('1 début sélectionné')
+
+  await swipeFrom(page, 'button.calendar-date-choice[aria-label="2 mars 2025"]', 300, 140, 320, 320)
+  await expect(page.getByRole('heading', { name: 'Avril 2025' })).toBeVisible()
+  await expect(page.locator('.selection-count')).toHaveText('1 début sélectionné')
+})
+
 test('le sélecteur ancré ouvre sur aujourd’hui, accepte une date passée et gère annulation et clavier', async ({
   page,
 }) => {
@@ -250,8 +319,12 @@ test('sélectionne plusieurs débuts distincts, bloque les doublons et les dates
   await page.keyboard.press('ArrowLeft')
   await expect(calendar.getByRole('button', { name: '1 mars 2025', exact: true })).toBeFocused()
   await swipeFrom(page, 'button.calendar-date-choice[aria-label="1 mars 2025"]', 300, 100)
+  await expect(page.getByRole('heading', { name: 'Avril 2025' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Calendrier', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: 'Ajouter plusieurs débuts' })).toBeVisible()
+  await expect(page.locator('.selection-count')).toHaveText('0 débuts sélectionnés')
+  await page.getByRole('button', { name: 'Mois précédent' }).click()
+  await expect(page.getByRole('heading', { name: 'Mars 2025' })).toBeVisible()
   await expect(calendar.getByRole('button', { name: /12 mars 2025, début déjà enregistré/ })).toBeDisabled()
   await expect(calendar.getByRole('button', { name: '21 mars 2025, date future, non sélectionnable' })).toBeDisabled()
   await expect(page.getByText(/aucune plage continue/i)).toBeVisible()

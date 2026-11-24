@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { addCivilDays, buildCalendarMonth, shiftCalendarMonth } from '../../domain/dates'
 import type { PeriodStartEstimate } from '../../domain/forecast/estimate-next-period'
 import type { CivilDate, Period } from '../../domain/periods'
@@ -13,6 +13,17 @@ type PeriodCalendarViewProps = {
   today: CivilDate
   onSaveDates: (dates: CivilDate[]) => Promise<string | null>
   onSelectionModeChange: (isSelecting: boolean) => void
+}
+
+type MonthSwipeGesture = {
+  pointerId: number
+  startX: number
+  startY: number
+  lastX: number
+  lastTime: number
+  velocityX: number
+  isHorizontal: boolean
+  startedOnDateChoice: boolean
 }
 
 function getMonthTitle(monthStart: CivilDate): string {
@@ -60,6 +71,8 @@ export function PeriodCalendarView({
   const addModeButtonRef = useRef<HTMLButtonElement>(null)
   const pendingFocusDate = useRef<CivilDate | null>(null)
   const shouldReturnFocusToAddButton = useRef(false)
+  const monthSwipeGestureRef = useRef<MonthSwipeGesture | null>(null)
+  const suppressDateChoiceClickRef = useRef(false)
   const monthTitle = getMonthTitle(monthStart)
   const formattedMonthTitle = `${monthTitle[0].toLocaleUpperCase('fr-FR')}${monthTitle.slice(1)}`
   const calendarDays = buildCalendarMonth(monthStart, firstDayOfWeek)
@@ -110,6 +123,104 @@ export function PeriodCalendarView({
     const nextMonth = shiftCalendarMonth(monthStart, offset)
     setMonthStart(nextMonth)
     if (isAdding) setFocusedDate(getFirstSelectableDate(nextMonth, firstDayOfWeek, recordedStarts, today))
+  }
+
+  function handleMonthPointerDown(event: ReactPointerEvent<HTMLTableElement>) {
+    if (event.pointerType === 'mouse' || event.button !== 0 || isSaving) return
+
+    const target = event.target instanceof Element ? event.target : null
+    const startedOnDateChoice = Boolean(target?.closest('.calendar-date-choice'))
+    if (
+      target?.closest('button, a, input, select, textarea, summary, [role="button"], [contenteditable="true"]') &&
+      !startedOnDateChoice
+    ) {
+      return
+    }
+
+    monthSwipeGestureRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastTime: event.timeStamp,
+      velocityX: 0,
+      isHorizontal: false,
+      startedOnDateChoice,
+    }
+    event.stopPropagation()
+
+    try {
+      const captureTarget = event.target instanceof HTMLElement ? event.target : event.currentTarget
+      captureTarget.setPointerCapture(event.pointerId)
+    } catch {
+      // Synthetic pointer events and browsers without pointer capture still use the same intent checks.
+    }
+  }
+
+  function handleMonthPointerMove(event: ReactPointerEvent<HTMLTableElement>) {
+    const gesture = monthSwipeGestureRef.current
+    if (!gesture || gesture.pointerId !== event.pointerId) return
+
+    const deltaX = event.clientX - gesture.startX
+    const deltaY = event.clientY - gesture.startY
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
+
+    if (!gesture.isHorizontal) {
+      if (absY >= 10 && absY > absX * 1.1) {
+        monthSwipeGestureRef.current = null
+        return
+      }
+      if (absX < 12 || absX < absY * 1.3) return
+      gesture.isHorizontal = true
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    const elapsed = Math.max(1, event.timeStamp - gesture.lastTime)
+    gesture.velocityX = ((event.clientX - gesture.lastX) / elapsed) * 1000
+    gesture.lastX = event.clientX
+    gesture.lastTime = event.timeStamp
+
+    if (gesture.startedOnDateChoice) suppressDateChoiceClickRef.current = true
+  }
+
+  function finishMonthSwipe(event: ReactPointerEvent<HTMLTableElement>) {
+    const gesture = monthSwipeGestureRef.current
+    if (!gesture || gesture.pointerId !== event.pointerId) return
+    monthSwipeGestureRef.current = null
+    if (!gesture.isHorizontal) return
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    const deltaX = event.clientX - gesture.startX
+    const projectedDelta = deltaX + gesture.velocityX * 0.12
+    const shouldChangeMonth = Math.abs(deltaX) >= 56 || (Math.abs(deltaX) >= 12 && Math.abs(projectedDelta) >= 56)
+
+    if (shouldChangeMonth) changeMonth(projectedDelta < 0 ? 1 : -1)
+
+    if (gesture.startedOnDateChoice) {
+      suppressDateChoiceClickRef.current = true
+      window.setTimeout(() => {
+        suppressDateChoiceClickRef.current = false
+      }, 0)
+    }
+  }
+
+  function cancelMonthSwipe(event: ReactPointerEvent<HTMLTableElement>) {
+    if (monthSwipeGestureRef.current?.pointerId === event.pointerId) monthSwipeGestureRef.current = null
+  }
+
+  function preventDateClickAfterSwipe(event: ReactMouseEvent<HTMLTableElement>) {
+    if (!suppressDateChoiceClickRef.current) return
+    const target = event.target instanceof Element ? event.target : null
+    if (!target?.closest('.calendar-date-choice')) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    suppressDateChoiceClickRef.current = false
   }
 
   function leaveAddingMode(message = '') {
@@ -256,7 +367,15 @@ export function PeriodCalendarView({
         </div>
       )}
 
-      <table className="calendar-table" aria-label={`Calendrier pour ${monthTitle}`}>
+      <table
+        className="calendar-table"
+        aria-label={`Calendrier pour ${monthTitle}`}
+        onPointerDown={handleMonthPointerDown}
+        onPointerMove={handleMonthPointerMove}
+        onPointerUp={finishMonthSwipe}
+        onPointerCancel={cancelMonthSwipe}
+        onClickCapture={preventDateClickAfterSwipe}
+      >
         <thead>
           <tr>
             {weekDays.map(({ longName, shortName }) => (
