@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "periods": [
+    {
+      "id": "test-estimation-01",
+      "startDate": "2026-06-01",
+      "createdAt": "2026-06-01T12:00:00.000Z",
+      "updatedAt": "2026-06-01T12:00:00.000Z"
+    },
+    {
+      "id": "test-estimation-02",
+      "startDate": "2026-06-28",
+      "createdAt": "2026-06-28T12:00:00.000Z",
+      "updatedAt": "2026-06-28T12:00:00.000Z"
+    },
+    {
+      "id": "test-estimation-03",
+      "startDate": "2026-07-26",
+      "createdAt": "2026-07-26T12:00:00.000Z",
+      "updatedAt": "2026-07-26T12:00:00.000Z"
+    },
+    {
+      "id": "test-estimation-04",
+      "startDate": "2026-08-24",
+      "createdAt": "2026-08-24T12:00:00.000Z",
+      "updatedAt": "2026-08-24T12:00:00.000Z"
+    },
+    {
+      "id": "test-estimation-05",
+      "startDate": "2026-09-20",
+      "createdAt": "2026-09-20T12:00:00.000Z",
+      "updatedAt": "2026-09-20T12:00:00.000Z"
+    },
+    {
+      "id": "test-estimation-06",
+      "startDate": "2026-10-19",
+      "createdAt": "2026-10-19T12:00:00.000Z",
+      "updatedAt": "2026-10-19T12:00:00.000Z"
+    },
+    {
+      "id": "test-estimation-07",
+      "startDate": "2026-11-16",
+      "createdAt": "2026-11-16T12:00:00.000Z",
+      "updatedAt": "2026-11-16T12:00:00.000Z"
+    }
+  ],
+  "settings": {
+    "forecastMethod": "median-6",
+    "firstDayOfWeek": 1
+  }
+}

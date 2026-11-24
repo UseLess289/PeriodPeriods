@@ -41,52 +41,6 @@ function validBackup(startDates: string[], firstDayOfWeek: 0 | 1 = 1) {
   }
 }
 
-async function swipeMain(page: Page, startX: number, endX: number, startY = 320, endY = startY) {
-  await page.evaluate(
-    ({ startX, endX, startY, endY }) => {
-      const main = document.querySelector('main')!
-      const pointerOptions = (clientX: number, clientY: number) => ({
-        bubbles: true,
-        cancelable: true,
-        pointerId: 42,
-        pointerType: 'touch',
-        isPrimary: true,
-        button: 0,
-        clientX,
-        clientY,
-      })
-      main.dispatchEvent(new PointerEvent('pointerdown', pointerOptions(startX, startY)))
-      main.dispatchEvent(new PointerEvent('pointermove', pointerOptions(endX, endY)))
-    },
-    { startX, endX, startY, endY },
-  )
-  await page.locator('.swipe-neighbor').waitFor()
-  const dimensions = await page.evaluate(() => ({
-    viewport: document.documentElement.clientWidth,
-    document: document.documentElement.scrollWidth,
-    neighborText: document.querySelector('.swipe-neighbor')?.textContent ?? '',
-  }))
-  expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport)
-  await page.evaluate(
-    ({ endX, endY }) => {
-      document.querySelector('main')!.dispatchEvent(
-        new PointerEvent('pointerup', {
-          bubbles: true,
-          cancelable: true,
-          pointerId: 42,
-          pointerType: 'touch',
-          isPrimary: true,
-          button: 0,
-          clientX: endX,
-          clientY: endY,
-        }),
-      )
-    },
-    { endX, endY },
-  )
-  return dimensions
-}
-
 async function swipeFrom(page: Page, selector: string, startX: number, endX: number, startY = 320, endY = startY) {
   await page.locator(selector).evaluate(
     (target, { startX, endX, startY, endY }) => {
@@ -120,12 +74,15 @@ async function tapWithTouch(page: Page, selector: string) {
   await touch.detach()
 }
 
-test('navigue par balayage, respecte les gestes verticaux et restaure l’historique', async ({ page }) => {
+test('navigue avec la barre du bas et restaure l’historique', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
   await page.goto('/')
 
-  const calendarPreview = await swipeMain(page, 300, 170)
-  expect(calendarPreview.neighborText).toContain('Dates enregistrées')
+  await swipeFrom(page, 'main', 300, 170)
+  await expect(page.getByRole('heading', { name: 'Suivi des règles et du cycle' })).toBeVisible()
+  await expect(page).toHaveURL(/\/$/)
+
+  await page.getByRole('button', { name: 'Calendrier', exact: true }).click()
   await expect(page).toHaveURL(/\?view=calendar$/)
   await expect(page.getByRole('button', { name: 'Calendrier', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: 'Calendrier' })).toBeFocused()
@@ -134,8 +91,7 @@ test('navigue par balayage, respecte les gestes verticaux et restaure l’histor
   })
   expect(headingOutline).toBe('none')
 
-  const settingsPreview = await swipeMain(page, 300, 170)
-  expect(settingsPreview.neighborText).toContain('Sauvegarde locale')
+  await page.getByRole('button', { name: 'Réglages' }).click()
   await expect(page).toHaveURL(/\?view=settings$/)
   await expect(page.getByRole('heading', { name: 'Réglages' })).toBeFocused()
 
@@ -169,7 +125,7 @@ test('navigue par balayage, respecte les gestes verticaux et restaure l’histor
     return { prevented: move.defaultPrevented, touchAction: getComputedStyle(main).touchAction }
   })
   expect(verticalGesture.prevented).toBe(false)
-  expect(verticalGesture.touchAction).toContain('pan-y')
+  expect(verticalGesture.touchAction).not.toBe('none')
   await expect(page.getByRole('button', { name: 'Calendrier', exact: true })).toHaveAttribute('aria-current', 'page')
 
   const scrollStart = await page.evaluate(() => window.scrollY)

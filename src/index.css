@@ -112,11 +112,8 @@ summary:focus-visible {
   margin-inline: auto;
 }
 .main-stage {
-  position: relative;
-  /* This is an internal pager viewport; adjacent pages never widen the document. */
+  /* Keep accidental horizontal overflow from widening the document. */
   overflow-x: clip;
-  overflow-y: visible;
-  touch-action: pan-y;
 }
 .app-header {
   display: flex;
@@ -190,18 +187,6 @@ summary:focus-visible {
   min-width: 0;
   margin: 0;
   padding: 3.75rem 0 2rem;
-  touch-action: pan-y;
-}
-.swipe-neighbor {
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  left: 0;
-  width: 100%;
-  min-width: 0;
-  padding: 3.75rem 0 2rem;
-  pointer-events: none;
-  user-select: none;
 }
 .view-heading {
   min-width: 0;
@@ -1245,8 +1230,7 @@ h2 {
   .app-header {
     padding-top: 2rem;
   }
-  .main-content,
-  .swipe-neighbor {
+  .main-content {
     padding-top: 3.25rem;
   }
 }
@@ -1266,8 +1250,7 @@ h2 {
   .app-header {
     gap: 0.5rem;
   }
-  .main-content,
-  .swipe-neighbor {
+  .main-content {
     padding-top: 2.25rem;
   }
   .view-stack {

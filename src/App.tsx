@@ -1,6 +1,6 @@
 import { CalendarDays, Home, Moon, Settings, Sun } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { createPeriodDataStore, DuplicatePeriodStartError } from './data/period-data-store'
 import type { PeriodDataStore } from './data/period-data-store'
 import { estimateNextPeriod } from './domain/forecast/estimate-next-period'
@@ -26,16 +26,6 @@ function getViewFromLocation(): View {
   if (typeof window === 'undefined') return 'home'
   const view = new URLSearchParams(window.location.search).get('view')
   return view === 'calendar' || view === 'settings' ? view : 'home'
-}
-
-function getViewIndex(view: View): number {
-  return (['home', 'calendar', 'settings'] as const).indexOf(view)
-}
-
-function rubberBand(distance: number, dimension: number): number {
-  const sign = Math.sign(distance)
-  const magnitude = Math.abs(distance)
-  return sign * ((magnitude * dimension * 0.55) / (dimension + 0.55 * magnitude))
 }
 
 function getStoredTheme(): Theme {
@@ -68,27 +58,8 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<PeriodSaveError | null>(null)
-  const [swipeOffset, setSwipeOffset] = useState(0)
-  const [swipeStageWidth, setSwipeStageWidth] = useState(0)
-  const [swipeNeighborView, setSwipeNeighborView] = useState<View | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const previousViewRef = useRef(activeView)
-  const isCalendarSelectionModeRef = useRef(false)
-  const swipeGestureRef = useRef<{
-    pointerId: number
-    startX: number
-    startY: number
-    startOffset: number
-    stageWidth: number
-    lastX: number
-    lastTime: number
-    velocityX: number
-    lastVisualOffset: number
-    visualVelocity: number
-    isHorizontal: boolean
-    viewAtStart: View
-  } | null>(null)
-  const swipeAnimationRef = useRef<number | null>(null)
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -141,12 +112,6 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
     (view: View) => {
       if (view === activeView) return
 
-      if (swipeAnimationRef.current !== null) cancelAnimationFrame(swipeAnimationRef.current)
-      swipeAnimationRef.current = null
-      swipeGestureRef.current = null
-      setSwipeOffset(0)
-      setSwipeNeighborView(null)
-
       const url = new URL(window.location.href)
       if (view === 'home') url.searchParams.delete('view')
       else url.searchParams.set('view', view)
@@ -155,176 +120,6 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
     },
     [activeView],
   )
-
-  const handleSelectionModeChange = useCallback((isSelecting: boolean) => {
-    isCalendarSelectionModeRef.current = isSelecting
-  }, [])
-
-  function animateSwipeTo(offset: number, velocity: number, target: number, onComplete: () => void) {
-    if (swipeAnimationRef.current !== null) cancelAnimationFrame(swipeAnimationRef.current)
-    if (
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
-      (Math.abs(offset - target) < 0.5 && Math.abs(velocity) < 5)
-    ) {
-      setSwipeOffset(target)
-      swipeAnimationRef.current = null
-      onComplete()
-      return
-    }
-
-    let position = offset - target
-    let speed = velocity
-    let lastFrameTime = performance.now()
-    const stiffness = 360
-    const damping = 2 * Math.sqrt(stiffness)
-
-    const animate = (time: number) => {
-      const deltaSeconds = Math.min((time - lastFrameTime) / 1000, 0.032)
-      lastFrameTime = time
-      speed += (-stiffness * position - damping * speed) * deltaSeconds
-      position += speed * deltaSeconds
-
-      if (Math.abs(position) < 0.5 && Math.abs(speed) < 5) {
-        setSwipeOffset(target)
-        swipeAnimationRef.current = null
-        onComplete()
-        return
-      }
-
-      setSwipeOffset(target + position)
-      swipeAnimationRef.current = requestAnimationFrame(animate)
-    }
-
-    swipeAnimationRef.current = requestAnimationFrame(animate)
-  }
-
-  function returnSwipeToRest(offset: number, velocity: number) {
-    animateSwipeTo(offset, velocity, 0, () => setSwipeNeighborView(null))
-  }
-
-  function getSwipeNeighbor(view: View, offset: number): View | null {
-    if (offset === 0) return null
-    const destinationIndex = getViewIndex(view) + (offset < 0 ? 1 : -1)
-    const destinations: View[] = ['home', 'calendar', 'settings']
-    return destinations[destinationIndex] ?? null
-  }
-
-  function handleSwipePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (
-      event.pointerType === 'mouse' ||
-      event.button !== 0 ||
-      isCalendarSelectionModeRef.current ||
-      (event.target instanceof Element &&
-        event.target.closest('button, a, input, select, textarea, summary, [role="button"], [contenteditable="true"]'))
-    ) {
-      return
-    }
-
-    if (swipeAnimationRef.current !== null) cancelAnimationFrame(swipeAnimationRef.current)
-    swipeAnimationRef.current = null
-    const startOffset = swipeOffset
-    const stageWidth = event.currentTarget.clientWidth
-    setSwipeStageWidth(stageWidth)
-    swipeGestureRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startOffset,
-      stageWidth,
-      lastX: event.clientX,
-      lastTime: event.timeStamp,
-      velocityX: 0,
-      lastVisualOffset: startOffset,
-      visualVelocity: 0,
-      isHorizontal: false,
-      viewAtStart: activeView,
-    }
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      // Synthetic pointer events and browsers without pointer capture still use the same intent checks.
-    }
-  }
-
-  function handleSwipePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    const gesture = swipeGestureRef.current
-    if (!gesture || gesture.pointerId !== event.pointerId) return
-
-    const deltaX = event.clientX - gesture.startX
-    const deltaY = event.clientY - gesture.startY
-    const absX = Math.abs(deltaX)
-    const absY = Math.abs(deltaY)
-
-    if (!gesture.isHorizontal) {
-      if (absY >= 10 && absY > absX * 1.1) {
-        swipeGestureRef.current = null
-        returnSwipeToRest(gesture.lastVisualOffset, gesture.visualVelocity)
-        return
-      }
-      if (absX < 12 || absX < absY * 1.3) return
-      gesture.isHorizontal = true
-    } else if (absY > absX * 1.3) {
-      swipeGestureRef.current = null
-      returnSwipeToRest(gesture.lastVisualOffset, gesture.visualVelocity)
-      return
-    }
-
-    event.preventDefault()
-    const elapsed = Math.max(1, event.timeStamp - gesture.lastTime)
-    gesture.velocityX = ((event.clientX - gesture.lastX) / elapsed) * 1000
-    gesture.lastX = event.clientX
-    gesture.lastTime = event.timeStamp
-
-    const width = gesture.stageWidth || window.innerWidth
-    const rawOffset = gesture.startOffset + deltaX
-    const directionAtBoundary =
-      (getViewIndex(gesture.viewAtStart) === 0 && rawOffset > 0) ||
-      (getViewIndex(gesture.viewAtStart) === 2 && rawOffset < 0)
-    const maxDirectTravel = width * 0.78
-    const visualOffset = directionAtBoundary
-      ? rubberBand(rawOffset, width)
-      : Math.sign(rawOffset) *
-        (Math.abs(rawOffset) <= maxDirectTravel
-          ? Math.abs(rawOffset)
-          : maxDirectTravel + rubberBand(Math.abs(rawOffset) - maxDirectTravel, width * 0.35))
-    gesture.visualVelocity = ((visualOffset - gesture.lastVisualOffset) / elapsed) * 1000
-    gesture.lastVisualOffset = visualOffset
-    setSwipeNeighborView(getSwipeNeighbor(gesture.viewAtStart, visualOffset))
-    setSwipeOffset(visualOffset)
-  }
-
-  function finishSwipe(event: ReactPointerEvent<HTMLDivElement>, cancelled = false) {
-    const gesture = swipeGestureRef.current
-    if (!gesture || gesture.pointerId !== event.pointerId) return
-    swipeGestureRef.current = null
-
-    if (cancelled || !gesture.isHorizontal) {
-      returnSwipeToRest(gesture.lastVisualOffset, gesture.visualVelocity)
-      return
-    }
-
-    const deltaX = event.clientX - gesture.startX
-    const projectedDelta = deltaX + gesture.velocityX * 0.12
-    const meetsIntentThreshold = Math.abs(deltaX) >= 68 || (Math.abs(deltaX) >= 18 && Math.abs(projectedDelta) >= 68)
-    const direction = gesture.lastVisualOffset < 0 ? 1 : -1
-    const nextIndex = getViewIndex(gesture.viewAtStart) + direction
-    const destinations: View[] = ['home', 'calendar', 'settings']
-    const destination = destinations[nextIndex]
-
-    if (meetsIntentThreshold && destination) {
-      const width = gesture.stageWidth || window.innerWidth
-      const targetOffset = direction > 0 ? -width : width
-      setSwipeNeighborView(destination)
-      animateSwipeTo(gesture.lastVisualOffset, gesture.visualVelocity, targetOffset, () => {
-        setSwipeOffset(0)
-        setSwipeNeighborView(null)
-        navigateToView(destination)
-      })
-      return
-    }
-
-    returnSwipeToRest(gesture.lastVisualOffset, gesture.visualVelocity)
-  }
 
   async function savePeriod(startDate: CivilDate) {
     setSaveMessage(null)
@@ -439,7 +234,6 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
             firstDayOfWeek={settings.firstDayOfWeek}
             today={today}
             onSaveDates={savePeriodStarts}
-            onSelectionModeChange={handleSelectionModeChange}
           />
         )}
         {!isLoading && !loadError && periods !== null && settings !== null && view === 'settings' && (
@@ -477,39 +271,10 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
         </button>
       </header>
 
-      <div
-        className="main-stage"
-        onPointerDown={handleSwipePointerDown}
-        onPointerMove={handleSwipePointerMove}
-        onPointerUp={finishSwipe}
-        onPointerCancel={(event) => finishSwipe(event, true)}
-      >
-        <main
-          id="main-content"
-          className="main-content"
-          tabIndex={-1}
-          aria-busy={isLoading}
-          style={{
-            transform: swipeOffset === 0 ? undefined : `translate3d(${swipeOffset}px, 0, 0)`,
-            willChange: swipeOffset === 0 ? undefined : 'transform',
-          }}
-        >
+      <div className="main-stage">
+        <main id="main-content" className="main-content" tabIndex={-1} aria-busy={isLoading}>
           {renderPageContent(activeView, true)}
         </main>
-
-        {swipeNeighborView && isDataReady && !isLoading && !loadError && (
-          <div
-            className="swipe-neighbor"
-            aria-hidden="true"
-            inert
-            style={{
-              transform: `translate3d(${(getViewIndex(swipeNeighborView) > getViewIndex(activeView) ? 1 : -1) * swipeStageWidth + swipeOffset}px, 0, 0)`,
-              willChange: 'transform',
-            }}
-          >
-            {renderPageContent(swipeNeighborView, false)}
-          </div>
-        )}
       </div>
 
       <nav className="bottom-nav" aria-label="Navigation principale">

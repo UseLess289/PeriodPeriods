@@ -12,7 +12,6 @@ type PeriodCalendarViewProps = {
   firstDayOfWeek: 0 | 1
   today: CivilDate
   onSaveDates: (dates: CivilDate[]) => Promise<string | null>
-  onSelectionModeChange: (isSelecting: boolean) => void
 }
 
 type MonthSwipeGesture = {
@@ -52,14 +51,7 @@ function getFirstSelectableDate(
   )
 }
 
-export function PeriodCalendarView({
-  periods,
-  estimate,
-  firstDayOfWeek,
-  today,
-  onSaveDates,
-  onSelectionModeChange,
-}: PeriodCalendarViewProps) {
+export function PeriodCalendarView({ periods, estimate, firstDayOfWeek, today, onSaveDates }: PeriodCalendarViewProps) {
   const [monthStart, setMonthStart] = useState<CivilDate>(`${today.slice(0, 7)}-01`)
   const [isAdding, setIsAdding] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -90,11 +82,6 @@ export function PeriodCalendarView({
       shortName: new Intl.DateTimeFormat('fr-FR', { weekday: 'short', timeZone: 'UTC' }).format(date),
     }
   })
-
-  useEffect(() => {
-    onSelectionModeChange(isAdding)
-    return () => onSelectionModeChange(false)
-  }, [isAdding, onSelectionModeChange])
 
   useEffect(() => {
     if (!pendingFocusDate.current) return
