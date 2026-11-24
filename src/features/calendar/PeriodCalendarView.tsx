@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { addCivilDays, buildCalendarMonth, shiftCalendarMonth } from '../../domain/dates'
 import type { PeriodStartEstimate } from '../../domain/forecast/estimate-next-period'
+import { DEFAULT_PERIOD_DURATION, daysBetweenCivilDates, getPeriodDuration } from '../../domain/periods'
 import type { CivilDate, Period } from '../../domain/periods'
 import { formatCivilDate, formatCivilMonth, getCalendarWeekdays, type Locale } from '../shared/format-civil-date'
 
@@ -86,6 +87,13 @@ export function PeriodCalendarView({
   const formattedMonthTitle = `${monthTitle[0].toLocaleUpperCase(locale)}${monthTitle.slice(1)}`
   const calendarDays = buildCalendarMonth(monthStart, firstDayOfWeek)
   const recordedStarts = new Set(periods.map(({ startDate }) => startDate))
+  const displayedDays = calendarDays.filter((day) => day.inDisplayedMonth)
+  const firstDisplayed = displayedDays[0].date
+  const lastDisplayed = displayedDays[displayedDays.length - 1].date
+  const recordedSpans = periods
+    .filter((period) => period.startDate <= lastDisplayed)
+    .map((period) => ({ start: period.startDate, duration: getPeriodDuration(period) }))
+    .filter(({ start, duration }) => start >= firstDisplayed || daysBetweenCivilDates(start, firstDisplayed) < duration)
   const monthPeriodStarts = new Set(
     periods.filter((period) => period.startDate.startsWith(monthStart.slice(0, 7))).map((period) => period.startDate),
   )
@@ -322,13 +330,15 @@ export function PeriodCalendarView({
   return (
     <section className="calendar-section" lang={locale} aria-labelledby="calendar-month-title">
       <div className="calendar-heading">
-        <div>
-          <p className="section-label">{text('Dates enregistrées', 'Recorded dates')}</p>
-          <h2 id="calendar-month-title" aria-live="polite" aria-atomic="true">
-            {formattedMonthTitle}
-          </h2>
-        </div>
-        <div className="month-navigation">
+        <button
+          className="month-nav-button month-nav-previous"
+          type="button"
+          aria-label={monthNavigation.previous}
+          onClick={() => changeMonth(-1)}
+        >
+          <ChevronLeft size={20} aria-hidden="true" />
+        </button>
+        <div className="calendar-month-summary">
           <button
             className="secondary-button today-button"
             type="button"
@@ -337,23 +347,21 @@ export function PeriodCalendarView({
           >
             {todayLabel}
           </button>
-          <button
-            className="month-nav-button"
-            type="button"
-            aria-label={monthNavigation.previous}
-            onClick={() => changeMonth(-1)}
-          >
-            <ChevronLeft size={20} aria-hidden="true" />
-          </button>
-          <button
-            className="month-nav-button"
-            type="button"
-            aria-label={monthNavigation.next}
-            onClick={() => changeMonth(1)}
-          >
-            <ChevronRight size={20} aria-hidden="true" />
-          </button>
+          <div className="calendar-month-context">
+            <p className="section-label">{text('Dates enregistrées', 'Recorded dates')}</p>
+            <h2 id="calendar-month-title" aria-live="polite" aria-atomic="true">
+              {formattedMonthTitle}
+            </h2>
+          </div>
         </div>
+        <button
+          className="month-nav-button month-nav-next"
+          type="button"
+          aria-label={monthNavigation.next}
+          onClick={() => changeMonth(1)}
+        >
+          <ChevronRight size={20} aria-hidden="true" />
+        </button>
       </div>
 
       <table
@@ -384,6 +392,13 @@ export function PeriodCalendarView({
                 const isFuture = day.date > today
                 const isSelected = selectedDates.has(day.date)
                 const isForecastCenter = estimate.kind !== 'insufficient' && day.date === estimate.predictedStartDate
+                const isRecordedDay = recordedSpans.some(
+                  ({ start, duration }) => day.date >= start && daysBetweenCivilDates(start, day.date) < duration,
+                )
+                const isForecastDay =
+                  estimate.kind !== 'insufficient' &&
+                  day.date >= estimate.predictedStartDate &&
+                  daysBetweenCivilDates(estimate.predictedStartDate, day.date) < DEFAULT_PERIOD_DURATION
                 const isForecastRange =
                   estimate.kind === 'range' &&
                   day.date >= estimate.earliestStartDate &&
@@ -405,6 +420,10 @@ export function PeriodCalendarView({
                     ? [text('Borne haute de la plage estimée', 'Latest date in the estimated range')]
                     : []),
                   ...(isForecastCenter ? [centerLabel] : []),
+                  ...(isRecordedDay && !hasPeriodStart ? [text('Jour de règles', 'Period day')] : []),
+                  ...(isForecastDay && !isForecastCenter && !isForecastLowerBound && !isForecastUpperBound
+                    ? [text('Jour de règles estimé', 'Estimated period day')]
+                    : []),
                   ...(isForecastRange && !isForecastCenter && !isForecastLowerBound && !isForecastUpperBound
                     ? [text('Dans la plage estimée', 'Within the estimated range')]
                     : []),
@@ -425,7 +444,8 @@ export function PeriodCalendarView({
                     className={[
                       day.inDisplayedMonth ? '' : 'is-outside-month',
                       day.date === today ? 'is-today' : '',
-                      hasPeriodStart ? 'has-period-start' : '',
+                      day.inDisplayedMonth && isRecordedDay ? 'has-period-day' : '',
+                      day.inDisplayedMonth && isForecastDay ? 'has-estimated-period-day' : '',
                       isFutureStart ? 'is-future-start' : '',
                       isForecastRange ? 'is-estimated-range' : '',
                       isForecastCenter ? 'is-estimated-center' : '',
@@ -473,7 +493,6 @@ export function PeriodCalendarView({
                           <span className="calendar-day-number">{dayNumber}</span>
                           <span className="calendar-markers" aria-hidden="true">
                             {isForecastRange && <span className="forecast-range-mark" />}
-                            {isForecastCenter && <span className="forecast-center-mark" />}
                             {(isForecastLowerBound || isForecastUpperBound) && <span className="forecast-bound-mark" />}
                           </span>
                         </time>
@@ -504,7 +523,7 @@ export function PeriodCalendarView({
         )}
         <li>
           <span className="period-start-mark" aria-hidden="true" />
-          {recordedLabel}
+          {text('Règles enregistrées', 'Recorded period')}
         </li>
         {estimate.kind === 'range' && (
           <>
@@ -521,7 +540,7 @@ export function PeriodCalendarView({
         {estimate.kind !== 'insufficient' && (
           <li>
             <span className="forecast-center-mark" aria-hidden="true" />
-            {centerLabel}
+            {text('Règles estimées', 'Estimated period')}
           </li>
         )}
       </ul>

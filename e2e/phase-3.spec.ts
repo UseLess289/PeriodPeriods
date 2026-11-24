@@ -51,7 +51,7 @@ test('présente l’historique complet et explique la médiane sur un petit écr
   const methodSummary = page.getByText('Comprendre l’estimation')
   await methodSummary.focus()
   await page.keyboard.press('Enter')
-  await expect(page.locator('details')).toHaveAttribute('open', '')
+  await expect(page.locator('.method-explanation')).toHaveAttribute('open', '')
   await expect(page.getByText(/À partir de six, elle utilise les six plus récents/i)).toBeVisible()
   await expect(page.getByText(/médiane arrondie est ajoutée au dernier début passé/i)).toBeVisible()
 

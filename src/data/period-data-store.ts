@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import { copyValidatedAppSettings, copyValidatedNewPeriod, DEFAULT_SETTINGS } from '../domain/periods'
+import { copyValidatedAppSettings, DEFAULT_SETTINGS, normalizePeriod } from '../domain/periods'
 import type { AppSettings, NewPeriod, Period, PeriodChanges } from '../domain/periods'
 import { parsePeriodBackup, serializePeriodBackup } from './period-backup'
 import { parsePeriodCsv } from './period-csv'
@@ -24,6 +24,17 @@ class PeriodDatabase extends Dexie {
       periods: 'id,&startDate',
       settings: 'key',
     })
+    this.version(2)
+      .stores({ periods: 'id,&startDate', settings: 'key' })
+      .upgrade((transaction) =>
+        transaction
+          .table<Period>('periods')
+          .toCollection()
+          .modify((period) => {
+            period.durationDays = normalizePeriod(period).durationDays
+            delete period.endDate
+          }),
+      )
   }
 }
 
@@ -82,7 +93,7 @@ export function createPeriodDataStore(databaseName = 'PeriodPeriods'): PeriodDat
 
   const store: PeriodDataStore = {
     async addPeriod(input) {
-      const fields = copyValidatedNewPeriod(input)
+      const fields = normalizePeriod(input)
 
       const now = new Date().toISOString()
       const period: Period = {
@@ -102,7 +113,7 @@ export function createPeriodDataStore(databaseName = 'PeriodPeriods'): PeriodDat
     },
 
     async addPeriods(inputs) {
-      const fields = inputs.map(copyValidatedNewPeriod)
+      const fields = inputs.map(normalizePeriod)
       const seenStarts = new Set<string>()
       for (const { startDate } of fields) {
         if (seenStarts.has(startDate)) throw new DuplicatePeriodStartError(startDate)
@@ -170,7 +181,16 @@ export function createPeriodDataStore(databaseName = 'PeriodPeriods'): PeriodDat
 
       await database.transaction('rw', database.periods, database.settings, async () => {
         await database.periods.clear()
-        if (backup.periods.length > 0) await database.periods.bulkAdd(backup.periods)
+        if (backup.periods.length > 0) {
+          await database.periods.bulkAdd(
+            backup.periods.map(({ id, createdAt, updatedAt, ...fields }) => ({
+              ...normalizePeriod(fields),
+              id,
+              createdAt,
+              updatedAt,
+            })),
+          )
+        }
         await database.settings.put({ key: 'app', value: backup.settings })
       })
     },
@@ -207,7 +227,11 @@ export function createPeriodDataStore(databaseName = 'PeriodPeriods'): PeriodDat
           const current = await database.periods.get(id)
           if (!current) throw new PeriodNotFoundError(id)
 
-          const fields = copyValidatedNewPeriod({ ...current, ...changes })
+          const fields = normalizePeriod({
+            ...current,
+            ...changes,
+            ...(changes.endDate === undefined ? {} : { durationDays: undefined }),
+          })
           const updated: Period = {
             ...fields,
             id: current.id,

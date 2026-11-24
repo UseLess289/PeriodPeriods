@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import Dexie from 'dexie'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPeriodDataStore, DuplicatePeriodStartError } from './period-data-store'
 
@@ -18,12 +19,35 @@ describe('period data store', () => {
   it('stores a period and returns its locally generated identity and timestamps', async () => {
     const saved = await store.addPeriod({ startDate: '2025-03-08' })
 
-    expect(saved).toMatchObject({ startDate: '2025-03-08' })
+    expect(saved).toMatchObject({ startDate: '2025-03-08', durationDays: 5 })
     expect(saved.id).toBeTruthy()
     expect(saved.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(saved.updatedAt).toBe(saved.createdAt)
     await expect(store.getPeriod(saved.id)).resolves.toEqual(saved)
     await expect(store.getPeriods()).resolves.toEqual([saved])
+  })
+
+  it('migrates legacy date ranges and round-trips structured daily observations in backups', async () => {
+    const legacy = new Dexie(databaseName)
+    legacy.version(1).stores({ periods: 'id,&startDate', settings: 'key' })
+    await legacy.table('periods').add({
+      id: 'legacy',
+      startDate: '2025-03-30',
+      endDate: '2025-04-01',
+      createdAt: '2025-03-30T00:00:00.000Z',
+      updatedAt: '2025-03-30T00:00:00.000Z',
+    })
+    legacy.close()
+
+    const migrated = await store.getPeriod('legacy')
+    expect(migrated).toMatchObject({ durationDays: 3 })
+    expect(migrated).not.toHaveProperty('endDate')
+
+    const dailyLogs = [{ day: 2, flow: 'heavy', headache: false }] as const
+    await store.updatePeriod('legacy', { dailyLogs: [...dailyLogs] })
+    await store.importBackup(await store.exportBackup())
+    await expect(store.getPeriod('legacy')).resolves.toMatchObject({ durationDays: 3, dailyLogs })
+    await expect(store.updatePeriod('legacy', { durationDays: 1 })).rejects.toThrow(/distinct days/)
   })
 
   it('keeps optional details independent from the caller input', async () => {
@@ -45,7 +69,7 @@ describe('period data store', () => {
       id: created.id,
       startDate: created.startDate,
       createdAt: created.createdAt,
-      endDate: '2025-03-12',
+      durationDays: 5,
       note: 'Douleurs légères',
     })
     expect(updated.updatedAt).not.toBe(created.updatedAt)
@@ -243,7 +267,9 @@ describe('period data store', () => {
     await store.importBackup(JSON.stringify(backup))
 
     await expect(store.getPeriod(existing.id)).resolves.toBeUndefined()
-    await expect(store.getPeriods()).resolves.toEqual([restored])
+    const { endDate, ...restoredFields } = restored
+    expect(endDate).toBe('2025-04-06')
+    await expect(store.getPeriods()).resolves.toEqual([{ ...restoredFields, durationDays: 5 }])
     await expect(store.getSettings()).resolves.toEqual(settings)
   })
 
@@ -262,7 +288,7 @@ describe('period data store', () => {
 
     await store.importBackup(backup)
 
-    await expect(store.getPeriod(period.id)).resolves.toEqual(period)
+    await expect(store.getPeriod(period.id)).resolves.toEqual({ ...period, durationDays: 5 })
   })
 
   it('rolls back all data if the second IndexedDB record write fails during import', async () => {

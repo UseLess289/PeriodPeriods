@@ -5,9 +5,33 @@ export type CivilDate = string
 
 export type FlowLevel = 'light' | 'medium' | 'heavy'
 
+export const DEFAULT_PERIOD_DURATION = 5
+
+export const DAILY_INTENSITIES = ['flowIntensity', 'headacheIntensity', 'crampsIntensity', 'fatigueIntensity'] as const
+export type DailyIntensity = (typeof DAILY_INTENSITIES)[number]
+export type Intensity = 1 | 2 | 3 | 4 | 5
+
+export type PeriodDay = {
+  day: number
+  flow?: FlowLevel
+  headache?: boolean
+} & Partial<Record<DailyIntensity, Intensity>>
+
+export function pickDailyIntensities(entry: PeriodDay): Partial<Record<DailyIntensity, Intensity>> {
+  const intensities: Partial<Record<DailyIntensity, Intensity>> = {}
+  for (const key of DAILY_INTENSITIES) {
+    const value = entry[key]
+    if (value !== undefined) intensities[key] = value
+  }
+  return intensities
+}
+
 export type NewPeriod = {
   startDate: CivilDate
+  /** Legacy import field. Stored periods use durationDays instead. */
   endDate?: CivilDate
+  durationDays?: number
+  dailyLogs?: PeriodDay[]
   flow?: FlowLevel
   symptoms?: string[]
   note?: string
@@ -54,6 +78,13 @@ export function daysBetweenCivilDates(start: CivilDate, end: CivilDate): number 
   return (endDay.getTime() - startDay.getTime()) / millisecondsInDay
 }
 
+export function getPeriodDuration(period: NewPeriod): number {
+  return (
+    period.durationDays ??
+    (period.endDate ? daysBetweenCivilDates(period.startDate, period.endDate) + 1 : DEFAULT_PERIOD_DURATION)
+  )
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -68,6 +99,51 @@ export function assertValidNewPeriod(value: unknown): asserts value is NewPeriod
     assertValidCivilDate(value.endDate, 'endDate')
     if (value.endDate < value.startDate) {
       throw new RangeError('endDate must be on or after startDate')
+    }
+  }
+
+  const { durationDays, dailyLogs } = value
+  if (
+    durationDays !== undefined &&
+    (typeof durationDays !== 'number' ||
+      !Number.isSafeInteger(durationDays) ||
+      durationDays < 1 ||
+      value.endDate !== undefined)
+  ) {
+    throw new RangeError('durationDays must be a positive integer and must not be combined with endDate')
+  }
+  if (dailyLogs !== undefined) {
+    if (!Array.isArray(dailyLogs)) throw new TypeError('dailyLogs must be an array')
+    const duration =
+      typeof durationDays === 'number'
+        ? durationDays
+        : typeof value.endDate === 'string'
+          ? daysBetweenCivilDates(value.startDate, value.endDate) + 1
+          : DEFAULT_PERIOD_DURATION
+    const seen = new Set<number>()
+    for (const entry of dailyLogs as unknown[]) {
+      if (
+        !isRecord(entry) ||
+        typeof entry.day !== 'number' ||
+        !Number.isSafeInteger(entry.day) ||
+        entry.day < 1 ||
+        entry.day > duration ||
+        seen.has(entry.day)
+      ) {
+        throw new RangeError('Daily logs must refer to distinct days within the period')
+      }
+      if (entry.flow !== undefined && entry.flow !== 'light' && entry.flow !== 'medium' && entry.flow !== 'heavy') {
+        throw new TypeError('Invalid daily flow')
+      }
+      if (entry.headache !== undefined && typeof entry.headache !== 'boolean')
+        throw new TypeError('Invalid headache value')
+      for (const key of DAILY_INTENSITIES) {
+        const level = entry[key]
+        if (level !== undefined && (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > 5)) {
+          throw new RangeError(`${key} must be an integer from 1 to 5`)
+        }
+      }
+      seen.add(entry.day)
     }
   }
 
@@ -99,10 +175,26 @@ export function copyValidatedNewPeriod(value: unknown): NewPeriod {
   return {
     startDate: value.startDate,
     ...(value.endDate === undefined ? {} : { endDate: value.endDate }),
+    ...(value.durationDays === undefined ? {} : { durationDays: value.durationDays }),
+    ...(value.dailyLogs === undefined
+      ? {}
+      : {
+          dailyLogs: value.dailyLogs.map((entry) => ({
+            day: entry.day,
+            ...(entry.flow === undefined ? {} : { flow: entry.flow }),
+            ...(entry.headache === undefined ? {} : { headache: entry.headache }),
+            ...pickDailyIntensities(entry),
+          })),
+        }),
     ...(value.flow === undefined ? {} : { flow: value.flow }),
     ...(value.symptoms === undefined ? {} : { symptoms: [...value.symptoms] }),
     ...(value.note === undefined ? {} : { note: value.note }),
   }
+}
+
+export function normalizePeriod(value: unknown): Omit<NewPeriod, 'endDate'> & { durationDays: number } {
+  const { endDate, ...fields } = copyValidatedNewPeriod(value)
+  return { ...fields, durationDays: getPeriodDuration({ ...fields, endDate }) }
 }
 
 export function assertValidAppSettings(value: unknown): asserts value is AppSettings {

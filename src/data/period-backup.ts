@@ -1,10 +1,7 @@
 import { copyValidatedAppSettings, copyValidatedNewPeriod } from '../domain/periods'
 import type { AppSettings, NewPeriod, Period } from '../domain/periods'
 
-type BackupPeriodV1 = Pick<
-  Period,
-  'id' | 'startDate' | 'endDate' | 'flow' | 'symptoms' | 'note' | 'createdAt' | 'updatedAt'
->
+type BackupPeriodV1 = Period
 
 export interface PeriodBackupV1 {
   version: 1
@@ -13,17 +10,22 @@ export interface PeriodBackupV1 {
 }
 
 const BACKUP_V1_KEYS = ['version', 'periods', 'settings'] as const
-const PERIOD_V1_KEYS = ['id', 'startDate', 'endDate', 'flow', 'symptoms', 'note', 'createdAt', 'updatedAt'] as const
+const PERIOD_V1_KEYS = [
+  'id',
+  'startDate',
+  'endDate',
+  'durationDays',
+  'dailyLogs',
+  'flow',
+  'symptoms',
+  'note',
+  'createdAt',
+  'updatedAt',
+] as const
 const SETTINGS_V1_KEYS = ['forecastMethod', 'firstDayOfWeek'] as const
 
 function toBackupPeriodV1(period: Period): BackupPeriodV1 {
-  const fields = copyValidatedNewPeriod({
-    startDate: period.startDate,
-    ...(period.endDate === undefined ? {} : { endDate: period.endDate }),
-    ...(period.flow === undefined ? {} : { flow: period.flow }),
-    ...(period.symptoms === undefined ? {} : { symptoms: period.symptoms }),
-    ...(period.note === undefined ? {} : { note: period.note }),
-  })
+  const fields = copyValidatedNewPeriod(period)
 
   return {
     id: period.id,

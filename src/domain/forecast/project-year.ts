@@ -1,5 +1,5 @@
 import { addCivilDays } from '../dates'
-import { daysBetweenCivilDates } from '../periods'
+import { daysBetweenCivilDates, getPeriodDuration } from '../periods'
 import type { CivilDate, Period } from '../periods'
 import { estimateNextPeriod } from './estimate-next-period'
 
@@ -54,8 +54,8 @@ export function projectYear(periods: readonly Period[], today: CivilDate): Proje
 
 export function estimatePhases(cycle: ProjectedCycle, periods: readonly Period[]): EstimatedPhase[] {
   const durations = periods
-    .filter((period) => period.endDate && period.endDate >= period.startDate)
-    .map((period) => daysBetweenCivilDates(period.startDate, period.endDate ?? period.startDate) + 1)
+    .filter((period) => period.durationDays !== undefined || (period.endDate && period.endDate >= period.startDate))
+    .map(getPeriodDuration)
   if (durations.length === 0) return []
 
   const sorted = durations.sort((left, right) => left - right)

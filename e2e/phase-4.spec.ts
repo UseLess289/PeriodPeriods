@@ -217,7 +217,7 @@ test('le bouton Ajouter ouvre la saisie, qui accepte une date passée et gère l
   await page.keyboard.press('Enter')
   const dialog = page.getByRole('dialog', { name: 'Enregistrer une période' })
   const start = dialog.getByLabel('Début des règles')
-  await expect(start).toBeFocused()
+  await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeFocused()
   await expect(start).toHaveValue('2025-03-20')
   await start.fill('2025-03-21')
   expect(await start.evaluate((input: HTMLInputElement) => input.validity.rangeOverflow)).toBe(true)
@@ -358,6 +358,7 @@ test('reste dans la largeur aux tailles cibles et conserve thèmes, contraste et
 }) => {
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
   await page.goto('/')
+  await page.locator('.calendar-section').waitFor()
 
   for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 900 })
@@ -368,6 +369,31 @@ test('reste dans la largeur aux tailles cibles et conserve thèmes, contraste et
     }))
     expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport)
     expect(dimensions.main).toBeLessThanOrEqual(dimensions.viewport)
+
+    const calendarHeader = await page.evaluate(() => {
+      const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect()
+      const previous = bounds('.month-nav-previous')
+      const summary = bounds('.calendar-month-summary')
+      const next = bounds('.month-nav-next')
+      const today = bounds('.today-button')
+      const titleGroup = bounds('.calendar-month-context')
+      const label = bounds('.calendar-month-context .section-label')
+      const month = bounds('#calendar-month-title')
+      return {
+        order: previous.right <= summary.left && summary.right <= next.left,
+        todayIsBeforeTitle: today.right <= titleGroup.left,
+        titleFits: titleGroup.right <= summary.right && month.right <= titleGroup.right,
+        contextAligned: Math.abs(today.y + today.height / 2 - (titleGroup.y + titleGroup.height / 2)) < 1,
+        monthBelowLabel: month.top >= label.bottom,
+      }
+    })
+    expect(calendarHeader).toEqual({
+      order: true,
+      todayIsBeforeTitle: true,
+      titleFits: true,
+      contextAligned: true,
+      monthBelowLabel: true,
+    })
 
     await page.getByRole('button', { name: 'Ajouter un événement' }).click()
     const dialogBounds = await page.getByRole('dialog').boundingBox()
@@ -381,6 +407,23 @@ test('reste dans la largeur aux tailles cibles et conserve thèmes, contraste et
     expect(settingsWidth).toBeLessThanOrEqual(width)
     await page.getByRole('button', { name: 'Accueil' }).click()
   }
+
+  await page.setViewportSize({ width: 320, height: 640 })
+  await page.getByRole('button', { name: 'Ajouter un événement' }).click()
+  const dialogSpacing = await page.evaluate(() => {
+    const form = document.querySelector('#period-event-form')!.getBoundingClientRect()
+    const save = document.querySelector('.event-save')!.getBoundingClientRect()
+    const formElement = document.querySelector('#period-event-form')!
+    return {
+      gap: save.top - form.bottom,
+      canScroll: formElement.scrollHeight > formElement.clientHeight,
+      centerY: form.y + form.height / 2,
+    }
+  })
+  expect(dialogSpacing.gap).toBeGreaterThanOrEqual(8)
+  expect(dialogSpacing.canScroll).toBe(true)
+  expect(dialogSpacing.centerY).toBeCloseTo(320, 0)
+  await page.keyboard.press('Escape')
 
   await page.emulateMedia({ colorScheme: 'dark', contrast: 'more', reducedMotion: 'reduce' })
   await page.getByRole('button', { name: 'Réglages' }).click()

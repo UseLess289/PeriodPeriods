@@ -9,6 +9,7 @@ import { PeriodCalendarView } from './features/calendar/PeriodCalendarView'
 import { PeriodEntryView } from './features/periods/PeriodEntryView'
 import { PeriodEventDialog } from './features/periods/PeriodEventDialog'
 import { BackupSettingsView } from './features/settings/BackupSettingsView'
+import { AnalysisExportView } from './features/settings/AnalysisExportView'
 import { StatsView } from './features/stats/StatsView'
 
 type View = 'home' | 'stats' | 'settings'
@@ -153,14 +154,15 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
   )
 
   async function saveEvent(input: NewPeriod): Promise<string | null> {
-    if (input.startDate > today || (input.endDate && input.endDate > today)) {
+    if (input.startDate > today) {
       return 'Une date future ne peut pas être enregistrée.'
     }
     try {
       const existing = periods?.find((item) => item.startDate === input.startDate)
       if (existing) {
         const updated = await store.updatePeriod(existing.id, {
-          endDate: input.endDate,
+          durationDays: input.durationDays,
+          dailyLogs: input.dailyLogs,
           symptoms: input.symptoms,
         })
         setPeriods((current) => current?.map((item) => (item.id === updated.id ? updated : item)) ?? [])
@@ -327,6 +329,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
               <p role="status">{saveMessage}</p>
             </section>
             <BackupSettingsView store={store} onImported={refreshImportedData} locale={locale} />
+            <AnalysisExportView periods={periods} today={today} locale={locale} />
           </>
         )}
       </>
