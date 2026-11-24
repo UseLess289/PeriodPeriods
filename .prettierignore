@@ -3,3 +3,6 @@
 doc/
 dist/
 node_modules/
+
+.plawright-cli
+.plawright-mcp
