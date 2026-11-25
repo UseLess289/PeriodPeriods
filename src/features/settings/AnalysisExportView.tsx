@@ -69,12 +69,15 @@ export function AnalysisExportView({
       {!periods.some(({ startDate }) => startDate <= today) && (
         <p>{text('Aucune période à exporter.', 'No periods to export.')}</p>
       )}
-      <label htmlFor="analysis-prompt">{text('Prompt d’analyse', 'Analysis prompt')}</label>
-      <textarea id="analysis-prompt" ref={promptField} readOnly rows={6} value={prompts[locale]} />
-      <button className="secondary-button" type="button" onClick={copyPrompt}>
-        {text('Copier le prompt', 'Copy prompt')}
-      </button>
-      <p role="status">{copyStatus}</p>
+      <details className="analysis-prompt-disclosure">
+        <summary>{text('Afficher le prompt d’analyse', 'View analysis prompt')}</summary>
+        <label htmlFor="analysis-prompt">{text('Prompt d’analyse', 'Analysis prompt')}</label>
+        <textarea id="analysis-prompt" ref={promptField} readOnly rows={6} value={prompts[locale]} />
+        <button className="secondary-button" type="button" onClick={copyPrompt}>
+          {text('Copier le prompt', 'Copy prompt')}
+        </button>
+        <p role="status">{copyStatus}</p>
+      </details>
     </section>
   )
 }

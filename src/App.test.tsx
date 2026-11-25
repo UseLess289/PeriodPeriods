@@ -13,6 +13,9 @@ describe('PeriodPeriods app', () => {
     store = createPeriodDataStore(`periodperiods-app-${crypto.randomUUID()}`)
     window.history.replaceState(null, '', '/')
     window.localStorage.removeItem('periodperiods-theme')
+    window.localStorage.removeItem('periodperiods-locale')
+    window.localStorage.removeItem('periodperiods-backup-reminder')
+    window.localStorage.removeItem('periodperiods-next-backup-reminder')
     document.documentElement.dataset.theme = 'light'
   })
 
@@ -289,22 +292,81 @@ describe('PeriodPeriods app', () => {
     expect(screen.getByLabelText('Fichier de sauvegarde JSON')).toBeInTheDocument()
   })
 
-  it('toggles and remembers the selected color theme locally', async () => {
+  it('offers System, Light, and Dark appearance preferences and remembers the choice', async () => {
     const user = userEvent.setup()
     render(<App store={store} today="2025-03-20" />)
 
-    expect(screen.queryByRole('button', { name: 'Passer au thème sombre' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Réglages' }))
     const preferences = await screen.findByRole('region', { name: 'Préférences' })
-    const darkThemeButton = within(preferences).getByRole('button', { name: 'Passer au thème sombre' })
+    const appearance = within(preferences).getByRole('combobox', { name: 'Apparence' })
+    expect(appearance).toHaveValue('system')
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
-    await user.click(darkThemeButton)
+    await user.selectOptions(appearance, 'dark')
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
     expect(localStorage.getItem('periodperiods-theme')).toBe('dark')
 
-    await user.click(screen.getByRole('button', { name: 'Passer au thème clair' }))
+    await user.selectOptions(appearance, 'light')
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
     expect(localStorage.getItem('periodperiods-theme')).toBe('light')
+
+    await user.selectOptions(appearance, 'system')
+    expect(localStorage.getItem('periodperiods-theme')).toBe('system')
+  })
+
+  it('preserves a previously saved explicit theme instead of switching it to System', async () => {
+    window.localStorage.setItem('periodperiods-theme', 'dark')
+    render(<App store={store} today="2025-03-20" />)
+
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    await userEvent.click(await screen.findByRole('button', { name: 'Réglages' }))
+    expect(await screen.findByRole('combobox', { name: 'Apparence' })).toHaveValue('dark')
+  })
+
+  it('remembers the language and applies it throughout Settings', async () => {
+    const user = userEvent.setup()
+    render(<App store={store} today="2025-03-20" />)
+
+    await user.click(screen.getByRole('button', { name: 'Réglages' }))
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Langue' }), 'en')
+
+    expect(document.documentElement).toHaveAttribute('lang', 'en')
+    expect(localStorage.getItem('periodperiods-locale')).toBe('en')
+    expect(screen.getByRole('heading', { name: 'Local backup' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Appearance' })).toBeInTheDocument()
+  })
+
+  it('shows an in-app backup reminder one month after opting in and resets it after export', async () => {
+    await store.addPeriod({ startDate: '2025-01-01' })
+    const user = userEvent.setup()
+    const { rerender } = render(<App store={store} today="2025-01-31" />)
+
+    await user.click(await screen.findByRole('button', { name: 'Réglages' }))
+    const reminder = await screen.findByRole('combobox', { name: 'Rappel de sauvegarde' })
+    await user.selectOptions(reminder, 'monthly')
+
+    expect(localStorage.getItem('periodperiods-backup-reminder')).toBe('monthly')
+    expect(localStorage.getItem('periodperiods-next-backup-reminder')).toBe('2025-02-28')
+    await user.click(screen.getByRole('button', { name: 'Accueil' }))
+    expect(screen.queryByRole('region', { name: /c’est le moment de sauvegarder/i })).not.toBeInTheDocument()
+
+    rerender(<App store={store} today="2025-02-28" />)
+    const backupReminder = await screen.findByRole('region', { name: /c’est le moment de sauvegarder/i })
+    expect(within(backupReminder).getByText(/c’est le moment de sauvegarder/i)).toBeInTheDocument()
+
+    await user.click(within(backupReminder).getByRole('button', { name: 'Ouvrir les réglages de sauvegarde' }))
+    expect(await screen.findByRole('heading', { name: 'Sauvegarde locale' })).toBeInTheDocument()
+
+    const createObjectURL = vi.fn(() => 'blob:backup')
+    const clickDownload = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL: vi.fn() })
+    await user.click(screen.getByRole('button', { name: 'Télécharger la sauvegarde' }))
+    await waitFor(() => expect(localStorage.getItem('periodperiods-next-backup-reminder')).toBe('2025-03-28'))
+    expect(clickDownload).toHaveBeenCalledOnce()
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Rappel de sauvegarde' }), 'off')
+    expect(localStorage.getItem('periodperiods-backup-reminder')).toBe('off')
+    expect(localStorage.getItem('periodperiods-next-backup-reminder')).toBeNull()
+    clickDownload.mockRestore()
+    vi.unstubAllGlobals()
   })
 })

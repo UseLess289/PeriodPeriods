@@ -125,6 +125,7 @@ test('enregistre aujourd’hui avec le parcours adapté à la largeur et exporte
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Télécharger les données sans dates' }).click()
   expect((await download).suggestedFilename()).toBe('periodperiods-analysis.json')
+  await page.getByText('Afficher le prompt d’analyse').click()
   await expect(page.getByLabel('Prompt d’analyse')).toHaveValue(/Ne traite pas les données manquantes/)
 })
 
@@ -143,6 +144,10 @@ test('importe les jours Flo en conservant les réglages et signale les doublons'
       ],
     },
   })
+  await input.setInputFiles({ name: 'flo.json', mimeType: 'application/json', buffer: Buffer.from(flo) })
+  await expect(page.locator('.backup-action').last()).toContainText('3 période(s) à ajouter depuis Flo.')
+  await page.getByRole('button', { name: 'Annuler', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Choisir un fichier Flo JSON ou CSV' })).toBeFocused()
   await input.setInputFiles({ name: 'flo.json', mimeType: 'application/json', buffer: Buffer.from(flo) })
   await expect(page.locator('.backup-action').last()).toContainText('3 période(s) à ajouter depuis Flo.')
   await page.getByRole('button', { name: 'Confirmer l’ajout' }).click()
@@ -164,6 +169,11 @@ test('la langue anglaise persiste au rechargement', async ({ page }) => {
   await page.goto('/?view=settings')
   await page.getByLabel('Langue').selectOption('en')
   await expect(page.getByRole('heading', { name: 'Local backup' })).toBeVisible()
+  await page.getByLabel('Appearance').selectOption('system')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.emulateMedia({ colorScheme: 'light' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   await page.getByRole('button', { name: 'Home' }).click()

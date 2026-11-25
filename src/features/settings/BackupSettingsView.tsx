@@ -9,6 +9,7 @@ import { formatCivilDate } from '../shared/format-civil-date'
 type BackupSettingsViewProps = {
   store: PeriodDataStore
   onImported: () => Promise<void>
+  onBackupExported?: () => void
   locale?: 'fr' | 'en'
 }
 
@@ -19,10 +20,12 @@ function getBackupDateSummary(backup: PeriodBackupV2): string | null {
   return `${formatCivilDate(dates[0])} au ${formatCivilDate(dates.at(-1)!)}`
 }
 
-export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupSettingsViewProps) {
+export function BackupSettingsView({ store, onImported, onBackupExported, locale = 'fr' }: BackupSettingsViewProps) {
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const fileButtonRef = useRef<HTMLButtonElement>(null)
+  const csvFileInputRef = useRef<HTMLInputElement>(null)
+  const csvFileButtonRef = useRef<HTMLButtonElement>(null)
   const [preview, setPreview] = useState<PeriodBackupV2 | null>(null)
   const [backupJson, setBackupJson] = useState<string | null>(null)
   const [selectedFileName, setSelectedFileName] = useState('')
@@ -38,6 +41,7 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
   const [csvMessage, setCsvMessage] = useState('')
   const [csvError, setCsvError] = useState('')
   const [isCsvImporting, setIsCsvImporting] = useState(false)
+  const [csvSelectedFileName, setCsvSelectedFileName] = useState('')
 
   async function readCsvFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0]
@@ -46,6 +50,7 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
     setCsvPreview(null)
     setCsvMessage('')
     setCsvError('')
+    setCsvSelectedFileName(file?.name ?? '')
     if (!file) return
     try {
       const contents = await file.text()
@@ -115,6 +120,7 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
           'Backup downloaded. It contains your personal data and settings stored on this device.',
         ),
       )
+      onBackupExported?.()
     } catch {
       if (objectUrl) URL.revokeObjectURL(objectUrl)
       setExportError(
@@ -221,8 +227,8 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
         <h2 id="backup-settings-title">{text('Sauvegarde locale', 'Local backup')}</h2>
         <p>
           {text(
-            'Exporte une sauvegarde JSON v2 ou importe une v1/v2. Aucun compte ni synchronisation n’est utilisé.',
-            'Export a JSON v2 backup or import v1/v2. No account or synchronization is used.',
+            'Exporte une sauvegarde JSON v2 ou importe une v1/v2. Elle contient les périodes et le premier jour de la semaine; la langue, le thème et les rappels restent sur cet appareil. Aucun compte ni synchronisation n’est utilisé.',
+            'Export a JSON v2 backup or import v1/v2. It contains period data and the first day of the week; language, appearance, and reminder preferences stay on this device. No account or synchronization is used.',
           )}
         </p>
       </div>
@@ -354,10 +360,29 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
             'Flo: JSON export containing operationalData.cycles. CSV: startDate column (YYYY-MM-DD); optional endDate, flow, symptoms and note. Separate symptoms with |.',
           )}
         </p>
-        <label className="secondary-button csv-file-label" htmlFor="csv-file-input">
-          {text('Choisir un fichier Flo JSON ou CSV', 'Choose Flo JSON or CSV')}
-        </label>
-        <input id="csv-file-input" type="file" accept=".csv,text/csv,.json,application/json" onChange={readCsvFile} />
+        <div className="backup-file-control">
+          <input
+            ref={csvFileInputRef}
+            className="backup-file-input visually-hidden"
+            id="csv-file-input"
+            type="file"
+            accept=".csv,text/csv,.json,application/json"
+            tabIndex={-1}
+            aria-label={text('Fichier Flo JSON ou CSV', 'Flo JSON or CSV file')}
+            onChange={readCsvFile}
+          />
+          <button
+            className="secondary-button backup-file-button"
+            ref={csvFileButtonRef}
+            type="button"
+            onClick={() => csvFileInputRef.current?.click()}
+          >
+            {text('Choisir un fichier Flo JSON ou CSV', 'Choose a Flo JSON or CSV file')}
+          </button>
+          <span className="backup-file-name">
+            {csvSelectedFileName || text('Aucun fichier choisi', 'No file chosen')}
+          </span>
+        </div>
         {csvError && (
           <p className="field-error" role="alert">
             {csvError}
@@ -390,13 +415,17 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
               onClick={() => {
                 setCsvPreview(null)
                 setCsvText(null)
+                setCsvSelectedFileName('')
+                csvFileButtonRef.current?.focus()
               }}
             >
               {text('Annuler', 'Cancel')}
             </button>
           </div>
         )}
-        <p role="status">{csvMessage}</p>
+        <p className="form-feedback" role="status" aria-live="polite" aria-atomic="true">
+          {csvMessage}
+        </p>
       </section>
     </section>
   )

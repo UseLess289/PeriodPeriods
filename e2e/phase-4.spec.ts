@@ -409,6 +409,7 @@ test('ouvre une période du calendrier pour modifier sa durée et ses maux', asy
   const periodDayFour = calendar.getByRole('button', {
     name: 'Modifier la période du 15 mars 2025 (débutée le 12 mars 2025)',
   })
+  await expect(periodDayFour).toBeVisible()
   await tapWithTouch(
     page,
     'button.calendar-period-edit[aria-label="Modifier la période du 15 mars 2025 (débutée le 12 mars 2025)"]',
@@ -636,7 +637,7 @@ test('reste dans la largeur aux tailles cibles et conserve thèmes, contraste et
 
   await page.emulateMedia({ colorScheme: 'dark', contrast: 'more', reducedMotion: 'reduce' })
   await page.getByRole('button', { name: 'Réglages' }).click()
-  await page.getByRole('button', { name: 'Passer au thème sombre' }).click()
+  await page.getByLabel('Apparence').selectOption('dark')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   const darkAccessibility = await new AxeBuilder({ page }).analyze()
   expect(darkAccessibility.violations).toEqual([])

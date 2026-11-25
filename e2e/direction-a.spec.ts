@@ -7,7 +7,7 @@ test('keeps estimate context, logging, and calendar markers clear on mobile', as
   await page.clock.install({ time: new Date('2025-03-27T12:00:00.000Z') })
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/')
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 
   for (const startDate of ['2025-01-01', '2025-01-29', '2025-02-26', '2025-03-27']) {
     await recordStart(page, startDate)
@@ -50,7 +50,8 @@ test('keeps estimate context, logging, and calendar markers clear on mobile', as
   expect(calendarAccessibility.violations).toEqual([])
 
   await page.getByRole('button', { name: 'Réglages' }).click()
-  await page.getByRole('button', { name: 'Passer au thème sombre' }).click()
+  await expect(page.getByLabel('Apparence')).toHaveValue('system')
+  await page.getByLabel('Apparence').selectOption('dark')
   await page.getByRole('button', { name: 'Accueil' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   const darkAccessibility = await new AxeBuilder({ page }).analyze()
