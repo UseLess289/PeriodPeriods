@@ -71,6 +71,8 @@ export function PeriodCalendarView({
 }: PeriodCalendarViewProps) {
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
   const [monthStart, setMonthStart] = useState<CivilDate>(`${today.slice(0, 7)}-01`)
+  const [monthDirection, setMonthDirection] = useState<-1 | 1>(1)
+  const [hasChangedMonth, setHasChangedMonth] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [selectedDates, setSelectedDates] = useState<Set<CivilDate>>(() => new Set())
@@ -82,6 +84,8 @@ export function PeriodCalendarView({
   const pendingFocusDate = useRef<CivilDate | null>(null)
   const shouldReturnFocusToAddButton = useRef(false)
   const monthSwipeGestureRef = useRef<MonthSwipeGesture | null>(null)
+  const calendarTableRef = useRef<HTMLTableElement>(null)
+  const swipeSettleTimerRef = useRef<number | null>(null)
   const suppressDateChoiceClickRef = useRef(false)
   const monthTitle = formatCivilMonth(monthStart, locale)
   const formattedMonthTitle = `${monthTitle[0].toLocaleUpperCase(locale)}${monthTitle.slice(1)}`
@@ -123,6 +127,13 @@ export function PeriodCalendarView({
     pendingFocusDate.current = null
   }, [focusedDate, monthStart])
 
+  useEffect(
+    () => () => {
+      if (swipeSettleTimerRef.current !== null) window.clearTimeout(swipeSettleTimerRef.current)
+    },
+    [],
+  )
+
   useEffect(() => {
     if (isAdding || !shouldReturnFocusToAddButton.current) return
     addModeButtonRef.current?.focus()
@@ -140,10 +151,21 @@ export function PeriodCalendarView({
     setIsAdding(true)
   }
 
-  function changeMonth(offset: number) {
-    const nextMonth = shiftCalendarMonth(monthStart, offset)
+  function showMonth(nextMonth: CivilDate) {
+    if (nextMonth === monthStart) return
+    setHasChangedMonth(true)
+    setMonthDirection(nextMonth > monthStart ? 1 : -1)
     setMonthStart(nextMonth)
     if (isAdding) setFocusedDate(getFirstSelectableDate(nextMonth, firstDayOfWeek, recordedStarts, today))
+  }
+
+  function changeMonth(offset: number) {
+    const nextMonth = shiftCalendarMonth(monthStart, offset)
+    showMonth(nextMonth)
+  }
+
+  function goToToday() {
+    showMonth(`${today.slice(0, 7)}-01`)
   }
 
   function handleMonthPointerDown(event: ReactPointerEvent<HTMLTableElement>) {
@@ -156,6 +178,16 @@ export function PeriodCalendarView({
       !startedOnDateChoice
     ) {
       return
+    }
+
+    if (swipeSettleTimerRef.current !== null) {
+      window.clearTimeout(swipeSettleTimerRef.current)
+      swipeSettleTimerRef.current = null
+    }
+    calendarTableRef.current?.parentElement?.getAnimations().forEach((animation) => animation.cancel())
+    if (calendarTableRef.current) {
+      calendarTableRef.current.classList.remove('is-dragging', 'is-settling')
+      calendarTableRef.current.style.transform = ''
     }
 
     monthSwipeGestureRef.current = {
@@ -199,6 +231,12 @@ export function PeriodCalendarView({
     event.preventDefault()
     event.stopPropagation()
 
+    const table = calendarTableRef.current
+    if (table) {
+      table.classList.add('is-dragging')
+      table.style.transform = `translate3d(${deltaX}px, 0, 0)`
+    }
+
     const elapsed = Math.max(1, event.timeStamp - gesture.lastTime)
     gesture.velocityX = ((event.clientX - gesture.lastX) / elapsed) * 1000
     gesture.lastX = event.clientX
@@ -221,6 +259,7 @@ export function PeriodCalendarView({
     const shouldChangeMonth = Math.abs(deltaX) >= 56 || (Math.abs(deltaX) >= 12 && Math.abs(projectedDelta) >= 56)
 
     if (shouldChangeMonth) changeMonth(projectedDelta < 0 ? 1 : -1)
+    else settleMonthSwipe()
 
     if (gesture.startedOnDateChoice) {
       suppressDateChoiceClickRef.current = true
@@ -231,7 +270,24 @@ export function PeriodCalendarView({
   }
 
   function cancelMonthSwipe(event: ReactPointerEvent<HTMLTableElement>) {
-    if (monthSwipeGestureRef.current?.pointerId === event.pointerId) monthSwipeGestureRef.current = null
+    if (monthSwipeGestureRef.current?.pointerId !== event.pointerId) return
+    monthSwipeGestureRef.current = null
+    settleMonthSwipe()
+  }
+
+  function settleMonthSwipe() {
+    const table = calendarTableRef.current
+    if (!table || !table.classList.contains('is-dragging')) return
+
+    table.classList.remove('is-dragging')
+    table.classList.add('is-settling')
+    table.style.transform = ''
+
+    if (swipeSettleTimerRef.current !== null) window.clearTimeout(swipeSettleTimerRef.current)
+    swipeSettleTimerRef.current = window.setTimeout(() => {
+      table.classList.remove('is-settling')
+      swipeSettleTimerRef.current = null
+    }, 180)
   }
 
   function preventDateClickAfterSwipe(event: ReactMouseEvent<HTMLTableElement>) {
@@ -285,7 +341,7 @@ export function PeriodCalendarView({
       if (!recordedStarts.has(date)) {
         pendingFocusDate.current = date
         setFocusedDate(date)
-        setMonthStart(`${date.slice(0, 7)}-01`)
+        showMonth(`${date.slice(0, 7)}-01`)
         return
       }
       date = addCivilDays(date, direction)
@@ -343,7 +399,7 @@ export function PeriodCalendarView({
             className="secondary-button today-button"
             type="button"
             disabled={monthStart === `${today.slice(0, 7)}-01`}
-            onClick={() => setMonthStart(`${today.slice(0, 7)}-01`)}
+            onClick={goToToday}
           >
             {todayLabel}
           </button>
@@ -364,146 +420,156 @@ export function PeriodCalendarView({
         </button>
       </div>
 
-      <table
-        className="calendar-table"
-        aria-label={text(`Calendrier pour ${monthTitle}`, `Calendar for ${monthTitle}`)}
-        onPointerDown={handleMonthPointerDown}
-        onPointerMove={handleMonthPointerMove}
-        onPointerUp={finishMonthSwipe}
-        onPointerCancel={cancelMonthSwipe}
-        onClickCapture={preventDateClickAfterSwipe}
+      <div
+        className={`calendar-month-viewport${hasChangedMonth ? (monthDirection > 0 ? ' is-entering-next' : ' is-entering-previous') : ''}`}
+        key={monthStart}
       >
-        <thead>
-          <tr>
-            {weekDays.map(({ longName, shortName }) => (
-              <th key={longName} scope="col" aria-label={longName}>
-                {shortName}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: calendarDays.length / 7 }, (_, weekIndex) => (
-            <tr key={calendarDays[weekIndex * 7].date}>
-              {calendarDays.slice(weekIndex * 7, weekIndex * 7 + 7).map((day) => {
-                const dayNumber = Number(day.date.slice(-2))
-                const hasPeriodStart = monthPeriodStarts.has(day.date)
-                const isFutureStart = hasPeriodStart && day.date > today
-                const isFuture = day.date > today
-                const isSelected = selectedDates.has(day.date)
-                const isForecastCenter = estimate.kind !== 'insufficient' && day.date === estimate.predictedStartDate
-                const isRecordedDay = recordedSpans.some(
-                  ({ start, duration }) => day.date >= start && daysBetweenCivilDates(start, day.date) < duration,
-                )
-                const isForecastDay =
-                  estimate.kind !== 'insufficient' &&
-                  day.date >= estimate.predictedStartDate &&
-                  daysBetweenCivilDates(estimate.predictedStartDate, day.date) < DEFAULT_PERIOD_DURATION
-                const isForecastRange =
-                  estimate.kind === 'range' &&
-                  day.date >= estimate.earliestStartDate &&
-                  day.date <= estimate.latestStartDate
-                const isForecastLowerBound = estimate.kind === 'range' && day.date === estimate.earliestStartDate
-                const isForecastUpperBound = estimate.kind === 'range' && day.date === estimate.latestStartDate
-                const dateDescriptions = [
-                  ...(hasPeriodStart
-                    ? [
-                        isFutureStart
-                          ? text('Début enregistré pour une date à venir', 'Recorded period start on a future date')
-                          : recordedLabel,
-                      ]
-                    : []),
-                  ...(isForecastLowerBound
-                    ? [text('Borne basse de la plage estimée', 'Earliest date in the estimated range')]
-                    : []),
-                  ...(isForecastUpperBound
-                    ? [text('Borne haute de la plage estimée', 'Latest date in the estimated range')]
-                    : []),
-                  ...(isForecastCenter ? [centerLabel] : []),
-                  ...(isRecordedDay && !hasPeriodStart ? [text('Jour de règles', 'Period day')] : []),
-                  ...(isForecastDay && !isForecastCenter && !isForecastLowerBound && !isForecastUpperBound
-                    ? [text('Jour de règles estimé', 'Estimated period day')]
-                    : []),
-                  ...(isForecastRange && !isForecastCenter && !isForecastLowerBound && !isForecastUpperBound
-                    ? [text('Dans la plage estimée', 'Within the estimated range')]
-                    : []),
-                  ...(estimate.kind !== 'insufficient' && estimate.isPast && isForecastCenter
-                    ? [text('Estimation passée', 'Past estimate')]
-                    : []),
-                ]
-                const unavailableReason = hasPeriodStart
-                  ? text('début déjà enregistré, non sélectionnable', 'period start already recorded, unavailable')
-                  : isFuture
-                    ? text('date future, non sélectionnable', 'future date, unavailable')
-                    : ''
-                const dateLabel = day.inDisplayedMonth ? formatCivilDate(day.date, locale) : ''
-
-                return (
-                  <td
-                    key={day.date}
-                    className={[
-                      day.inDisplayedMonth ? '' : 'is-outside-month',
-                      day.date === today ? 'is-today' : '',
-                      day.inDisplayedMonth && isRecordedDay ? 'has-period-day' : '',
-                      day.inDisplayedMonth && isForecastDay ? 'has-estimated-period-day' : '',
-                      isFutureStart ? 'is-future-start' : '',
-                      isForecastRange ? 'is-estimated-range' : '',
-                      isForecastCenter ? 'is-estimated-center' : '',
-                      isForecastLowerBound || isForecastUpperBound ? 'is-estimated-bound' : '',
-                      estimate.kind !== 'insufficient' && estimate.isPast && isForecastCenter ? 'is-estimate-past' : '',
-                      isAdding && isSelected ? 'is-selected-for-addition' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    aria-hidden={day.inDisplayedMonth ? undefined : 'true'}
-                  >
-                    {day.inDisplayedMonth &&
-                      (isAdding ? (
-                        <button
-                          className="calendar-date-choice"
-                          ref={(element) => {
-                            if (element) dateButtons.current.set(day.date, element)
-                            else dateButtons.current.delete(day.date)
-                          }}
-                          type="button"
-                          aria-label={`${dateLabel}${isSelected ? text(', sélectionnée', ', selected') : ''}${unavailableReason ? `, ${unavailableReason}` : ''}`}
-                          aria-pressed={isSelected}
-                          disabled={Boolean(unavailableReason)}
-                          tabIndex={focusedDate === day.date ? 0 : -1}
-                          onClick={() => toggleDate(day.date)}
-                          onKeyDown={(event) => handleSelectionKeyDown(event, day.date)}
-                        >
-                          <span className="calendar-day-number">{dayNumber}</span>
-                          <span className="calendar-selection-check" aria-hidden="true">
-                            {isSelected ? '✓' : ''}
-                          </span>
-                        </button>
-                      ) : (
-                        <time
-                          dateTime={day.date}
-                          aria-current={day.date === today ? 'date' : undefined}
-                          aria-label={
-                            dateDescriptions.length > 0
-                              ? locale === 'en'
-                                ? `${dateLabel}: ${new Intl.ListFormat('en-US').format(dateDescriptions)}`
-                                : `${dateDescriptions.join(' et ')} le ${dateLabel}`
-                              : dateLabel
-                          }
-                        >
-                          <span className="calendar-day-number">{dayNumber}</span>
-                          <span className="calendar-markers" aria-hidden="true">
-                            {isForecastRange && <span className="forecast-range-mark" />}
-                            {(isForecastLowerBound || isForecastUpperBound) && <span className="forecast-bound-mark" />}
-                          </span>
-                        </time>
-                      ))}
-                  </td>
-                )
-              })}
+        <table
+          ref={calendarTableRef}
+          className="calendar-table"
+          aria-label={text(`Calendrier pour ${monthTitle}`, `Calendar for ${monthTitle}`)}
+          onPointerDown={handleMonthPointerDown}
+          onPointerMove={handleMonthPointerMove}
+          onPointerUp={finishMonthSwipe}
+          onPointerCancel={cancelMonthSwipe}
+          onClickCapture={preventDateClickAfterSwipe}
+        >
+          <thead>
+            <tr>
+              {weekDays.map(({ longName, shortName }) => (
+                <th key={longName} scope="col" aria-label={longName}>
+                  {shortName}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {Array.from({ length: calendarDays.length / 7 }, (_, weekIndex) => (
+              <tr key={calendarDays[weekIndex * 7].date}>
+                {calendarDays.slice(weekIndex * 7, weekIndex * 7 + 7).map((day) => {
+                  const dayNumber = Number(day.date.slice(-2))
+                  const hasPeriodStart = monthPeriodStarts.has(day.date)
+                  const isFutureStart = hasPeriodStart && day.date > today
+                  const isFuture = day.date > today
+                  const isSelected = selectedDates.has(day.date)
+                  const isForecastCenter = estimate.kind !== 'insufficient' && day.date === estimate.predictedStartDate
+                  const isRecordedDay = recordedSpans.some(
+                    ({ start, duration }) => day.date >= start && daysBetweenCivilDates(start, day.date) < duration,
+                  )
+                  const isForecastDay =
+                    estimate.kind !== 'insufficient' &&
+                    day.date >= estimate.predictedStartDate &&
+                    daysBetweenCivilDates(estimate.predictedStartDate, day.date) < DEFAULT_PERIOD_DURATION
+                  const isForecastRange =
+                    estimate.kind === 'range' &&
+                    day.date >= estimate.earliestStartDate &&
+                    day.date <= estimate.latestStartDate
+                  const isForecastLowerBound = estimate.kind === 'range' && day.date === estimate.earliestStartDate
+                  const isForecastUpperBound = estimate.kind === 'range' && day.date === estimate.latestStartDate
+                  const dateDescriptions = [
+                    ...(hasPeriodStart
+                      ? [
+                          isFutureStart
+                            ? text('Début enregistré pour une date à venir', 'Recorded period start on a future date')
+                            : recordedLabel,
+                        ]
+                      : []),
+                    ...(isForecastLowerBound
+                      ? [text('Borne basse de la plage estimée', 'Earliest date in the estimated range')]
+                      : []),
+                    ...(isForecastUpperBound
+                      ? [text('Borne haute de la plage estimée', 'Latest date in the estimated range')]
+                      : []),
+                    ...(isForecastCenter ? [centerLabel] : []),
+                    ...(isRecordedDay && !hasPeriodStart ? [text('Jour de règles', 'Period day')] : []),
+                    ...(isForecastDay && !isForecastCenter && !isForecastLowerBound && !isForecastUpperBound
+                      ? [text('Jour de règles estimé', 'Estimated period day')]
+                      : []),
+                    ...(isForecastRange && !isForecastCenter && !isForecastLowerBound && !isForecastUpperBound
+                      ? [text('Dans la plage estimée', 'Within the estimated range')]
+                      : []),
+                    ...(estimate.kind !== 'insufficient' && estimate.isPast && isForecastCenter
+                      ? [text('Estimation passée', 'Past estimate')]
+                      : []),
+                  ]
+                  const unavailableReason = hasPeriodStart
+                    ? text('début déjà enregistré, non sélectionnable', 'period start already recorded, unavailable')
+                    : isFuture
+                      ? text('date future, non sélectionnable', 'future date, unavailable')
+                      : ''
+                  const dateLabel = day.inDisplayedMonth ? formatCivilDate(day.date, locale) : ''
+
+                  return (
+                    <td
+                      key={day.date}
+                      className={[
+                        day.inDisplayedMonth ? '' : 'is-outside-month',
+                        day.date === today ? 'is-today' : '',
+                        day.inDisplayedMonth && isRecordedDay ? 'has-period-day' : '',
+                        day.inDisplayedMonth && isForecastDay ? 'has-estimated-period-day' : '',
+                        isFutureStart ? 'is-future-start' : '',
+                        isForecastRange ? 'is-estimated-range' : '',
+                        isForecastCenter ? 'is-estimated-center' : '',
+                        isForecastLowerBound || isForecastUpperBound ? 'is-estimated-bound' : '',
+                        estimate.kind !== 'insufficient' && estimate.isPast && isForecastCenter
+                          ? 'is-estimate-past'
+                          : '',
+                        isAdding && isSelected ? 'is-selected-for-addition' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      aria-hidden={day.inDisplayedMonth ? undefined : 'true'}
+                    >
+                      {day.inDisplayedMonth &&
+                        (isAdding ? (
+                          <button
+                            className="calendar-date-choice"
+                            ref={(element) => {
+                              if (element) dateButtons.current.set(day.date, element)
+                              else dateButtons.current.delete(day.date)
+                            }}
+                            type="button"
+                            aria-label={`${dateLabel}${isSelected ? text(', sélectionnée', ', selected') : ''}${unavailableReason ? `, ${unavailableReason}` : ''}`}
+                            aria-pressed={isSelected}
+                            disabled={Boolean(unavailableReason)}
+                            tabIndex={focusedDate === day.date ? 0 : -1}
+                            onClick={() => toggleDate(day.date)}
+                            onKeyDown={(event) => handleSelectionKeyDown(event, day.date)}
+                          >
+                            <span className="calendar-day-number">{dayNumber}</span>
+                            <span className="calendar-selection-check" aria-hidden="true">
+                              {isSelected ? '✓' : ''}
+                            </span>
+                          </button>
+                        ) : (
+                          <time
+                            dateTime={day.date}
+                            aria-current={day.date === today ? 'date' : undefined}
+                            aria-label={
+                              dateDescriptions.length > 0
+                                ? locale === 'en'
+                                  ? `${dateLabel}: ${new Intl.ListFormat('en-US').format(dateDescriptions)}`
+                                  : `${dateDescriptions.join(' et ')} le ${dateLabel}`
+                                : dateLabel
+                            }
+                          >
+                            <span className="calendar-day-number">{dayNumber}</span>
+                            <span className="calendar-markers" aria-hidden="true">
+                              {isForecastRange && <span className="forecast-range-mark" />}
+                              {(isForecastLowerBound || isForecastUpperBound) && (
+                                <span className="forecast-bound-mark" />
+                              )}
+                            </span>
+                          </time>
+                        ))}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {saveError && (
         <p className="field-error calendar-save-error" role="alert">

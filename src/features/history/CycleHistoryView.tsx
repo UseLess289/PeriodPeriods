@@ -63,7 +63,7 @@ export function CycleHistoryView({ periods, today, locale = 'fr' }: CycleHistory
             className="cycle-history-list"
             aria-label={text('Intervalles entre les débuts enregistrés', 'Intervals between recorded period starts')}
           >
-            {history.intervals.map(({ previousStartDate, nextStartDate, durationDays }) => (
+            {[...history.intervals].reverse().map(({ previousStartDate, nextStartDate, durationDays }) => (
               <li key={`${previousStartDate}-${nextStartDate}`}>
                 <span className="cycle-history-dates">
                   <time dateTime={previousStartDate}>{formatCivilDate(previousStartDate, locale)}</time>

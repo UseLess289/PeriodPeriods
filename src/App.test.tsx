@@ -167,7 +167,7 @@ describe('PeriodPeriods app', () => {
     expect(screen.queryByRole('heading', { name: 'Prochain début estimé' })).not.toBeInTheDocument()
   })
 
-  it('shows observed intervals in order and separates future recorded dates', async () => {
+  it('shows observed intervals newest first and separates future recorded dates', async () => {
     for (const startDate of ['2025-03-27', '2025-01-29', '2025-04-24', '2025-02-26', '2025-01-01']) {
       await store.addPeriod({ startDate })
     }
@@ -176,10 +176,10 @@ describe('PeriodPeriods app', () => {
     const intervals = await screen.findByRole('list', { name: 'Intervalles entre les débuts enregistrés' })
     const rows = within(intervals).getAllByRole('listitem')
     expect(rows).toHaveLength(3)
-    expect(rows[0]).toHaveTextContent('1 janvier 2025 au 29 janvier 2025')
-    expect(rows[0]).toHaveTextContent('28 jours')
-    expect(rows[2]).toHaveTextContent('26 février 2025 au 27 mars 2025')
-    expect(rows[2]).toHaveTextContent('29 jours')
+    expect(rows[0]).toHaveTextContent('26 février 2025 au 27 mars 2025')
+    expect(rows[0]).toHaveTextContent('29 jours')
+    expect(rows[2]).toHaveTextContent('1 janvier 2025 au 29 janvier 2025')
+    expect(rows[2]).toHaveTextContent('28 jours')
     expect(screen.getByText(/3 intervalles observés/i)).toBeInTheDocument()
     expect(screen.getByText(/de 28 à 29 jours/i)).toBeInTheDocument()
     expect(screen.getByText(/jours entre deux débuts successifs, pas la durée des règles/i)).toBeInTheDocument()

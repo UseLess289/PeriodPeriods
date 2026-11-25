@@ -170,6 +170,19 @@ summary:focus-visible {
   margin: 0;
   padding: 3.75rem 0 2rem;
 }
+.view-content-enter {
+  animation: view-content-enter 150ms var(--ease-standard);
+}
+@keyframes view-content-enter {
+  from {
+    opacity: 0.82;
+    transform: translate3d(0, 0.4rem, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
 .view-heading {
   min-width: 0;
   max-width: 31rem;
@@ -647,6 +660,41 @@ h2 {
   border-collapse: collapse;
   table-layout: fixed;
   touch-action: pan-y;
+}
+.calendar-month-viewport {
+  width: 100%;
+}
+.calendar-month-viewport.is-entering-next {
+  animation: calendar-month-enter-next 150ms var(--ease-standard);
+}
+.calendar-month-viewport.is-entering-previous {
+  animation: calendar-month-enter-previous 150ms var(--ease-standard);
+}
+.calendar-table.is-dragging {
+  will-change: transform;
+}
+.calendar-table.is-settling {
+  transition: transform 140ms var(--ease-standard);
+}
+@keyframes calendar-month-enter-next {
+  from {
+    opacity: 0.8;
+    transform: translate3d(0.9rem, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes calendar-month-enter-previous {
+  from {
+    opacity: 0.8;
+    transform: translate3d(-0.9rem, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 .calendar-table th {
   padding: 0.6rem 0.1rem;

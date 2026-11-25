@@ -72,6 +72,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [eventDialogOpen, setEventDialogOpen] = useState(false)
+  const [hasNavigated, setHasNavigated] = useState(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const previousViewRef = useRef(activeView)
 
@@ -135,7 +136,10 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
   }, [activeView])
 
   useEffect(() => {
-    const handlePopState = () => setActiveView(getViewFromLocation())
+    const handlePopState = () => {
+      setHasNavigated(true)
+      setActiveView(getViewFromLocation())
+    }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
@@ -148,6 +152,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
       if (view === 'home') url.searchParams.delete('view')
       else url.searchParams.set('view', view)
       window.history.pushState({ view }, '', `${url.pathname}${url.search}${url.hash}`)
+      setHasNavigated(true)
       setActiveView(view)
     },
     [activeView],
@@ -348,7 +353,9 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
 
       <div className="main-stage">
         <main id="main-content" className="main-content" tabIndex={-1} aria-busy={isLoading}>
-          {renderPageContent(activeView, true)}
+          <div className={`view-content${hasNavigated ? ' view-content-enter' : ''}`} key={activeView}>
+            {renderPageContent(activeView, true)}
+          </div>
         </main>
       </div>
 
