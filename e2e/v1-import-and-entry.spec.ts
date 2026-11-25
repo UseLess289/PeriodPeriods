@@ -56,7 +56,7 @@ test('enregistre une période complète et la complète depuis la fenêtre de sa
   await savePeriod(dialog)
   await expect(dialog).not.toBeVisible()
   await expect(
-    page.getByRole('button', { name: 'Modifier la période commencée le 12 mars 2025, jour 1' }),
+    page.getByRole('button', { name: 'Modifier la période du 12 mars 2025 (débutée le 12 mars 2025)' }),
   ).toBeVisible()
 
   await page.getByRole('button', { name: 'Ajouter un événement' }).click()

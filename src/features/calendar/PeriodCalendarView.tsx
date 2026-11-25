@@ -514,7 +514,7 @@ export function PeriodCalendarView({
                         start <= today && day.date >= start && daysBetweenCivilDates(start, day.date) < duration,
                     )
                     .sort((left, right) => right.start.localeCompare(left.start))[0]?.period
-                   const datePhases: Array<{ phase: CyclePhaseName; possible: boolean }> = []
+                  const datePhases: Array<{ phase: CyclePhaseName; possible: boolean }> = []
                   if (day.inDisplayedMonth && !isRecordedDay && phaseRanges) {
                     for (const phase of cyclePhaseNames) {
                       const ranges = phaseRanges[phase]
