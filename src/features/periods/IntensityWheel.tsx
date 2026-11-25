@@ -9,11 +9,12 @@ type Props = {
   label: string
   value?: Intensity
   emptyLabel: string
+  emptyOptionLabel: string
   previousValue?: string
   onChange: (value: Intensity | undefined) => void
 }
 
-export function IntensityWheel({ id, label, value, emptyLabel, previousValue, onChange }: Props) {
+export function IntensityWheel({ id, label, value, emptyLabel, emptyOptionLabel, previousValue, onChange }: Props) {
   const wheelRef = useRef<HTMLDivElement>(null)
   const current = value ?? 0
   const initialValue = useRef(current)
@@ -110,7 +111,9 @@ export function IntensityWheel({ id, label, value, emptyLabel, previousValue, on
       </div>
       <select
         id={`${id}-select`}
+        name={`${id}-intensity`}
         className="intensity-native-select"
+        autoComplete="off"
         aria-describedby="event-intensity-hint"
         value={current}
         onChange={(event) => {
@@ -118,7 +121,7 @@ export function IntensityWheel({ id, label, value, emptyLabel, previousValue, on
           onChange(next === 0 ? undefined : (next as Intensity))
         }}
       >
-        <option value={0}>{emptyLabel}</option>
+        <option value={0}>{emptyOptionLabel}</option>
         {levels.slice(1).map((level) => (
           <option key={level} value={level}>
             {level} / 3

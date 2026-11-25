@@ -1572,8 +1572,8 @@ h2 {
 }
 @media (max-width: 30rem) {
   .event-dialog {
-    --event-save-clearance: calc(5.1rem + 3.25rem + var(--space-2) + env(safe-area-inset-bottom));
-    --event-error-clearance: 3.5rem;
+    --event-save-clearance: calc(5.1rem + 3.25rem + var(--space-2) + var(--space-3) + env(safe-area-inset-bottom));
+    --event-error-clearance: 4rem;
     height: 100dvh;
     padding: max(var(--space-2), env(safe-area-inset-top)) var(--space-2) 0;
     overflow: hidden;
@@ -1741,7 +1741,7 @@ h2 {
   .intensity-wheel-frame {
     display: none;
   }
-  .intensity-native-select {
+  .event-dialog .intensity-native-select {
     display: block;
     width: 100%;
     min-width: 0;
@@ -1816,6 +1816,10 @@ h2 {
 @media (max-width: 22rem) {
   .event-dialog-content {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .event-dialog .intensity-native-select {
+    padding-inline: 0.35rem;
+    font-size: 0.875rem;
   }
   .event-duration-heading {
     display: flex;

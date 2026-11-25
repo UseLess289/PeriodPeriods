@@ -31,6 +31,7 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
   const dialog = useRef<HTMLDialogElement>(null)
   const form = useRef<HTMLFormElement>(null)
+  const dialogContent = useRef<HTMLDivElement>(null)
   const dialogTitle = useRef<HTMLHeadingElement>(null)
   const startDateInput = useRef<HTMLInputElement>(null)
   const trackingDetails = useRef<HTMLDetailsElement>(null)
@@ -65,6 +66,7 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
     if (open && !element.open) {
       element.showModal()
       if (form.current) form.current.scrollTop = 0
+      if (dialogContent.current) dialogContent.current.scrollTop = 0
       trackingDetails.current?.removeAttribute('open')
       if (isMobileViewport) dialogTitle.current?.focus({ preventScroll: true })
       else saveButton.current?.focus({ preventScroll: true })
@@ -207,7 +209,13 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
       <>
         <div className="event-day-heading">
           <label htmlFor="event-day">{text('Jour de la période', 'Day of the period')}</label>
-          <select id="event-day" value={selectedDay} onChange={(event) => setActiveDay(Number(event.target.value))}>
+          <select
+            id="event-day"
+            name="period-day"
+            autoComplete="off"
+            value={selectedDay}
+            onChange={(event) => setActiveDay(Number(event.target.value))}
+          >
             {Array.from({ length: dayCount }, (_, index) => (
               <option key={index} value={index + 1}>
                 {text(`Jour ${index + 1}`, `Day ${index + 1}`)} –{' '}
@@ -224,6 +232,7 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
               label={label}
               value={dailyLog?.[key]}
               emptyLabel={text('Non renseigné', 'Not logged')}
+              emptyOptionLabel={text('Pas noté', 'Not logged')}
               previousValue={legacy ? text(`Ancien suivi : ${legacy}`, `Previous log: ${legacy}`) : undefined}
               onChange={(value) => updateDay(key, value)}
             />
@@ -275,13 +284,15 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
             {text('Annuler', 'Cancel')}
           </button>
         </div>
-        <div className="event-dialog-content">
+        <div className="event-dialog-content" ref={dialogContent}>
           <div className="event-tile event-start-tile">
             <label htmlFor="event-start">{text('Début des règles', 'Period start')}</label>
             <input
               id="event-start"
+              name="period-start"
               ref={startDateInput}
               type="date"
+              autoComplete="off"
               required
               max={today}
               value={startDate}
@@ -299,13 +310,15 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
             </div>
             <input
               id="event-duration"
+              name="period-duration"
               type="range"
+              autoComplete="off"
               min={minimumDuration}
               max={maximumDuration}
               value={durationDays}
               onChange={(event) => {
                 setDuration(event.target.valueAsNumber)
-                setError(null)
+                if (!dateError) setError(null)
               }}
             />
             <div className="event-duration-endpoints" aria-hidden="true">
@@ -322,10 +335,15 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
             )}
           </div>
           <p id="event-intensity-hint" className="visually-hidden">
-            {text(
-              'Choisis une intensité de 1 à 3, ou « Non renseigné ». Pour la molette, défile ou utilise les touches fléchées.',
-              'Choose an intensity from 1 to 3, or “Not logged”. For the wheel, scroll or use the arrow keys.',
-            )}
+            {isMobileViewport
+              ? text(
+                  'Choisis une intensité de 1 à 3, ou « Pas noté ».',
+                  'Choose an intensity from 1 to 3, or “Not logged”.',
+                )
+              : text(
+                  'Choisis une intensité de 1 à 3, ou « Non renseigné ». Pour la molette, défile ou utilise les touches fléchées.',
+                  'Choose an intensity from 1 to 3, or “Not logged”. For the wheel, scroll or use the arrow keys.',
+                )}
           </p>
           {isMobileViewport ? (
             <details className="event-details" ref={trackingDetails}>

@@ -299,6 +299,13 @@ test('le popup mobile reste lisible en petit écran et replie le suivi quotidien
     await dialog.getByRole('button', { name: 'Annuler' }).click()
     await expect(dialog).toBeHidden()
     await expect(add).toBeFocused()
+    if (viewport.width === 320) {
+      await add.click()
+      await expect(dialog.locator('details')).not.toHaveAttribute('open', '')
+      await expect(dialog.getByLabel('Début des règles')).toBeInViewport()
+      await expect(dialog.locator('.event-dialog-content')).toHaveJSProperty('scrollTop', 0)
+      await dialog.getByRole('button', { name: 'Annuler' }).click()
+    }
   }
 })
 
