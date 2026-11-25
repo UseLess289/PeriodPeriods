@@ -23,7 +23,7 @@ test('enregistre une période complète et la complète depuis la fenêtre de sa
   await expect(editing.getByRole('heading', { name: 'Compléter une période' })).toBeVisible()
   await expect(editing.getByLabel('Durée (jours)')).toHaveValue('4')
   await editing.getByLabel('Jour de la période').selectOption('2')
-  await expect(editing.getByRole('spinbutton', { name: 'Flux', exact: true })).toHaveAttribute('aria-valuenow', '5')
+  await expect(editing.getByRole('spinbutton', { name: 'Flux', exact: true })).toHaveAttribute('aria-valuenow', '3')
   await expect(editing.getByRole('spinbutton', { name: 'Maux de tête' })).toHaveAttribute('aria-valuenow', '1')
   await expect(editing.getByRole('spinbutton', { name: 'Crampes' })).toHaveAttribute('aria-valuenow', '1')
   await editing.getByRole('button', { name: 'Annuler' }).click()

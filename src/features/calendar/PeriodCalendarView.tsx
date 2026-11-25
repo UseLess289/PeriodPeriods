@@ -2,10 +2,37 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { addCivilDays, buildCalendarMonth, shiftCalendarMonth } from '../../domain/dates'
+import { cyclePhaseNames, estimateCyclePhaseRanges } from '../../domain/forecast/estimate-cycle-phases'
+import type { CivilDateRange, CyclePhaseName } from '../../domain/forecast/estimate-cycle-phases'
 import type { PeriodStartEstimate } from '../../domain/forecast/estimate-next-period'
-import { DEFAULT_PERIOD_DURATION, daysBetweenCivilDates, getPeriodDuration } from '../../domain/periods'
+import { daysBetweenCivilDates, getPeriodDuration } from '../../domain/periods'
 import type { CivilDate, Period } from '../../domain/periods'
 import { formatCivilDate, formatCivilMonth, getCalendarWeekdays, type Locale } from '../shared/format-civil-date'
+
+const phaseLabels: Record<CyclePhaseName, { fr: string; en: string }> = {
+  menstrual: { fr: 'Règles', en: 'Menstrual' },
+  follicular: { fr: 'Phase folliculaire', en: 'Follicular' },
+  ovulatory: { fr: 'Ovulation', en: 'Ovulation' },
+  luteal: { fr: 'Phase lutéale', en: 'Luteal' },
+}
+
+const estimatedPhaseDescriptions: Record<CyclePhaseName, { fr: string; en: string }> = {
+  menstrual: { fr: 'Règles estimées', en: 'Estimated menstrual phase' },
+  follicular: { fr: 'Phase folliculaire estimée', en: 'Estimated follicular phase' },
+  ovulatory: { fr: 'Ovulation estimée', en: 'Estimated ovulation date' },
+  luteal: { fr: 'Phase lutéale estimée', en: 'Estimated luteal phase' },
+}
+
+function dateIsInRange(range: CivilDateRange | null, date: CivilDate): boolean {
+  return range !== null && date >= range.startDate && date <= range.endDate
+}
+
+function phaseDescription(phase: CyclePhaseName, possible: boolean, locale: Locale): string {
+  const label = phaseLabels[phase][locale]
+  if (possible)
+    return locale === 'en' ? `Possible ${label.toLowerCase()} date` : `Date possible : ${label.toLowerCase()}`
+  return estimatedPhaseDescriptions[phase][locale]
+}
 
 type PeriodCalendarViewProps = {
   readonly locale?: Locale
@@ -101,6 +128,7 @@ export function PeriodCalendarView({
   const monthPeriodStarts = new Set(
     periods.filter((period) => period.startDate.startsWith(monthStart.slice(0, 7))).map((period) => period.startDate),
   )
+  const phaseRanges = estimate.kind === 'insufficient' ? null : estimateCyclePhaseRanges(periods, estimate, today)
   const orderedSelection = [...selectedDates].sort()
   const weekDays = getCalendarWeekdays(firstDayOfWeek, locale)
   const count = orderedSelection.length
@@ -420,6 +448,21 @@ export function PeriodCalendarView({
         </button>
       </div>
 
+      {phaseRanges && (
+        <ul className="calendar-legend phase-calendar-legend" aria-label={text('Phases du cycle', 'Cycle phases')}>
+          {cyclePhaseNames.map((phase) => (
+            <li key={phase}>
+              <span className={`phase-legend-swatch phase-legend-${phase}`} aria-hidden="true" />
+              {phaseLabels[phase][locale]}
+            </li>
+          ))}
+          <li>
+            <span className="phase-legend-swatch phase-legend-possible" aria-hidden="true" />
+            {text('Dates possibles', 'Possible dates')}
+          </li>
+        </ul>
+      )}
+
       <div
         className={`calendar-month-viewport${hasChangedMonth ? (monthDirection > 0 ? ' is-entering-next' : ' is-entering-previous') : ''}`}
         key={monthStart}
@@ -456,10 +499,23 @@ export function PeriodCalendarView({
                   const isRecordedDay = recordedSpans.some(
                     ({ start, duration }) => day.date >= start && daysBetweenCivilDates(start, day.date) < duration,
                   )
+                  const datePhases: Array<{ phase: CyclePhaseName; possible: boolean }> = []
+                  if (day.inDisplayedMonth && !isRecordedDay && phaseRanges) {
+                    for (const phase of cyclePhaseNames) {
+                      const ranges = phaseRanges[phase]
+                      if (dateIsInRange(ranges.expected, day.date)) datePhases.push({ phase, possible: false })
+                      else if (dateIsInRange(ranges.possible, day.date)) datePhases.push({ phase, possible: true })
+                    }
+                  }
+                  const expectedPhases = datePhases.filter(({ possible }) => !possible)
+                  const possiblePhases = datePhases.filter(({ possible }) => possible)
+                  const phaseBackgroundLayers = datePhases.map(({ phase, possible }) => {
+                    const opacity = possible ? 8 : 24
+                    const color = `color-mix(in srgb, var(--phase-${phase}) ${opacity}%, transparent)`
+                    return `linear-gradient(${color}, ${color})`
+                  })
                   const isForecastDay =
-                    estimate.kind !== 'insufficient' &&
-                    day.date >= estimate.predictedStartDate &&
-                    daysBetweenCivilDates(estimate.predictedStartDate, day.date) < DEFAULT_PERIOD_DURATION
+                    !isRecordedDay && dateIsInRange(phaseRanges?.menstrual.expected ?? null, day.date)
                   const isForecastRange =
                     estimate.kind === 'range' &&
                     day.date >= estimate.earliestStartDate &&
@@ -492,6 +548,7 @@ export function PeriodCalendarView({
                       ? [text('Estimation passée', 'Past estimate')]
                       : []),
                   ]
+                  const phaseDescriptionId = datePhases.length > 0 ? `phase-description-${day.date}` : undefined
                   const unavailableReason = hasPeriodStart
                     ? text('début déjà enregistré, non sélectionnable', 'period start already recorded, unavailable')
                     : isFuture
@@ -502,6 +559,11 @@ export function PeriodCalendarView({
                   return (
                     <td
                       key={day.date}
+                      style={
+                        phaseBackgroundLayers.length > 0
+                          ? { backgroundImage: phaseBackgroundLayers.join(', ') }
+                          : undefined
+                      }
                       className={[
                         day.inDisplayedMonth ? '' : 'is-outside-month',
                         day.date === today ? 'is-today' : '',
@@ -511,6 +573,8 @@ export function PeriodCalendarView({
                         isForecastRange ? 'is-estimated-range' : '',
                         isForecastCenter ? 'is-estimated-center' : '',
                         isForecastLowerBound || isForecastUpperBound ? 'is-estimated-bound' : '',
+                        ...expectedPhases.map(({ phase }) => `phase-expected-${phase}`),
+                        ...possiblePhases.map(({ phase }) => `phase-possible-${phase}`),
                         estimate.kind !== 'insufficient' && estimate.isPast && isForecastCenter
                           ? 'is-estimate-past'
                           : '',
@@ -533,6 +597,7 @@ export function PeriodCalendarView({
                             aria-pressed={isSelected}
                             disabled={Boolean(unavailableReason)}
                             tabIndex={focusedDate === day.date ? 0 : -1}
+                            aria-describedby={phaseDescriptionId}
                             onClick={() => toggleDate(day.date)}
                             onKeyDown={(event) => handleSelectionKeyDown(event, day.date)}
                           >
@@ -545,6 +610,7 @@ export function PeriodCalendarView({
                           <time
                             dateTime={day.date}
                             aria-current={day.date === today ? 'date' : undefined}
+                            aria-describedby={phaseDescriptionId}
                             aria-label={
                               dateDescriptions.length > 0
                                 ? locale === 'en'
@@ -562,6 +628,13 @@ export function PeriodCalendarView({
                             </span>
                           </time>
                         ))}
+                      {day.inDisplayedMonth && phaseDescriptionId && (
+                        <span id={phaseDescriptionId} className="visually-hidden">
+                          {datePhases
+                            .map(({ phase, possible }) => phaseDescription(phase, possible, locale))
+                            .join('; ')}
+                        </span>
+                      )}
                     </td>
                   )
                 })}

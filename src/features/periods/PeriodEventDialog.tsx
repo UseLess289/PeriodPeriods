@@ -208,8 +208,8 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
         </div>
         <p id="event-intensity-hint" className="visually-hidden">
           {text(
-            'Les molettes se règlent de 1 à 5 avec le défilement ou les touches fléchées. Zéro signifie non renseigné.',
-            'Set each wheel from 1 to 5 by scrolling or using the arrow keys. Zero means not logged.',
+            'Les molettes se règlent de 1 à 3 avec le défilement ou les touches fléchées. Zéro signifie non renseigné.',
+            'Set each wheel from 1 to 3 by scrolling or using the arrow keys. Zero means not logged.',
           )}
         </p>
         {dayCount > 0 ? (

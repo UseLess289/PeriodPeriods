@@ -31,13 +31,14 @@ test('keeps estimate context, logging, and calendar markers clear on mobile', as
     await recordStart(page, startDate)
   }
 
-  await expect(page.locator('.calendar-legend')).toContainText('Aujourd’hui')
+  const calendarLegend = page.getByRole('list', { name: 'Légende du calendrier' })
+  await expect(calendarLegend).toContainText('Aujourd’hui')
   await page.getByRole('button', { name: 'Mois suivant' }).click()
   const calendar = page.getByRole('table', { name: 'Calendrier pour avril 2025' })
   await expect(calendar.getByLabel(/Date centrale estimée le/)).toBeVisible()
-  await expect(page.locator('.calendar-legend')).not.toContainText('Aujourd’hui')
-  await expect(page.locator('.calendar-legend')).toContainText('Plage estimée')
-  await expect(page.locator('.calendar-legend')).toContainText('Bornes basse et haute')
+  await expect(calendarLegend).not.toContainText('Aujourd’hui')
+  await expect(calendarLegend).toContainText('Plage estimée')
+  await expect(calendarLegend).toContainText('Bornes basse et haute')
 
   const pageWidth = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,

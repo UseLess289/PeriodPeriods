@@ -1,5 +1,11 @@
 import Dexie, { type Table } from 'dexie'
-import { copyValidatedAppSettings, DEFAULT_SETTINGS, normalizePeriod } from '../domain/periods'
+import {
+  convertLegacyIntensityToThreeLevels,
+  copyValidatedAppSettings,
+  DAILY_INTENSITIES,
+  DEFAULT_SETTINGS,
+  normalizePeriod,
+} from '../domain/periods'
 import type { AppSettings, NewPeriod, Period, PeriodChanges } from '../domain/periods'
 import { parsePeriodBackup, serializePeriodBackup } from './period-backup'
 import { parsePeriodCsv } from './period-csv'
@@ -33,6 +39,21 @@ class PeriodDatabase extends Dexie {
           .modify((period) => {
             period.durationDays = normalizePeriod(period).durationDays
             delete period.endDate
+          }),
+      )
+    this.version(3)
+      .stores({ periods: 'id,&startDate', settings: 'key' })
+      .upgrade((transaction) =>
+        transaction
+          .table<Period>('periods')
+          .toCollection()
+          .modify((period) => {
+            period.dailyLogs?.forEach((entry) => {
+              for (const key of DAILY_INTENSITIES) {
+                const level = entry[key]
+                if (level !== undefined) entry[key] = convertLegacyIntensityToThreeLevels(level)
+              }
+            })
           }),
       )
   }

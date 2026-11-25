@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { PeriodDataStore } from '../../data/period-data-store'
 import { parsePeriodBackup } from '../../data/period-backup'
-import type { PeriodBackupV1 } from '../../data/period-backup'
+import type { PeriodBackupV2 } from '../../data/period-backup'
 import type { PeriodCsvPreview } from '../../data/period-data-store'
 import { formatCivilDate } from '../shared/format-civil-date'
 
@@ -12,7 +12,7 @@ type BackupSettingsViewProps = {
   locale?: 'fr' | 'en'
 }
 
-function getBackupDateSummary(backup: PeriodBackupV1): string | null {
+function getBackupDateSummary(backup: PeriodBackupV2): string | null {
   const dates = backup.periods.map(({ startDate }) => startDate).sort()
   if (dates.length === 0) return null
   if (dates.length === 1) return formatCivilDate(dates[0])
@@ -23,7 +23,7 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const fileButtonRef = useRef<HTMLButtonElement>(null)
-  const [preview, setPreview] = useState<PeriodBackupV1 | null>(null)
+  const [preview, setPreview] = useState<PeriodBackupV2 | null>(null)
   const [backupJson, setBackupJson] = useState<string | null>(null)
   const [selectedFileName, setSelectedFileName] = useState('')
   const [exportError, setExportError] = useState<string | null>(null)
@@ -146,8 +146,8 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
     } catch {
       setImportError(
         text(
-          'Ce fichier ne correspond pas à une sauvegarde JSON v1 valide. Choisis une autre sauvegarde.',
-          'This is not a valid JSON v1 backup. Choose another file.',
+          'Ce fichier ne correspond pas à une sauvegarde JSON v1 ou v2 valide. Choisis une autre sauvegarde.',
+          'This is not a valid JSON v1 or v2 backup. Choose another file.',
         ),
       )
     }
@@ -221,8 +221,8 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
         <h2 id="backup-settings-title">{text('Sauvegarde locale', 'Local backup')}</h2>
         <p>
           {text(
-            'Exporte ou importe une sauvegarde JSON v1. Aucun compte ni synchronisation n’est utilisé.',
-            'Export or import a JSON v1 backup. No account or synchronization is used.',
+            'Exporte une sauvegarde JSON v2 ou importe une v1/v2. Aucun compte ni synchronisation n’est utilisé.',
+            'Export a JSON v2 backup or import v1/v2. No account or synchronization is used.',
           )}
         </p>
       </div>
@@ -258,8 +258,8 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
         <h3 id="backup-import-title">{text('Importer', 'Import')}</h3>
         <p>
           {text(
-            'Choisis une sauvegarde v1 pour en vérifier le contenu avant le remplacement.',
-            'Choose a v1 backup to review its contents before replacing data.',
+            'Choisis une sauvegarde v1 ou v2 pour en vérifier le contenu avant le remplacement.',
+            'Choose a v1 or v2 backup to review its contents before replacing data.',
           )}
         </p>
         <p className="file-picker-label">{text('Fichier de sauvegarde JSON', 'JSON backup file')}</p>
@@ -290,8 +290,8 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
         </div>
         <p className="field-hint" id="backup-import-hint">
           {text(
-            'L’import valide le fichier avant toute modification. Il remplace toutes les dates et réglages présents.',
-            'The file is validated before any changes. Import replaces all existing dates and settings.',
+            'L’import valide le fichier avant toute modification et remplace les données présentes. Les anciennes notes de 1 à 5 sont converties à l’échelle actuelle de 1 à 3.',
+            'The file is validated before any changes and replaces existing data. Legacy 1–5 ratings are converted to the current 1–3 scale.',
           )}
         </p>
 
@@ -307,7 +307,7 @@ export function BackupSettingsView({ store, onImported, locale = 'fr' }: BackupS
             <dl>
               <div>
                 <dt>{text('Format', 'Format')}</dt>
-                <dd>JSON v1</dd>
+                <dd>JSON compatible</dd>
               </div>
               <div>
                 <dt>{text('Dates de début', 'Start dates')}</dt>

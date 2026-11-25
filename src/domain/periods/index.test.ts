@@ -70,6 +70,18 @@ describe('new-period validation', () => {
     expect(() => assertValidNewPeriod({ startDate: '2024-02-29', flow })).not.toThrow()
   })
 
+  it.each([1, 2, 3])('accepts intensity %d on the three-level scale', (intensity) => {
+    expect(() =>
+      assertValidNewPeriod({ startDate: '2024-02-29', dailyLogs: [{ day: 1, fatigueIntensity: intensity }] }),
+    ).not.toThrow()
+  })
+
+  it.each([0, 4, 5])('rejects intensity %d outside the three-level scale', (intensity) => {
+    expect(() =>
+      assertValidNewPeriod({ startDate: '2024-02-29', dailyLogs: [{ day: 1, fatigueIntensity: intensity }] }),
+    ).toThrow(/integer from 1 to 3/)
+  })
+
   it.each(['spotting', 'HEAVY', 2, null])('rejects invalid flow %j', (flow) => {
     expect(() => assertValidNewPeriod({ startDate: '2024-02-29', flow })).toThrow(/flow/)
   })

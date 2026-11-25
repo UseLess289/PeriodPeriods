@@ -9,7 +9,11 @@ export const DEFAULT_PERIOD_DURATION = 5
 
 export const DAILY_INTENSITIES = ['flowIntensity', 'headacheIntensity', 'crampsIntensity', 'fatigueIntensity'] as const
 export type DailyIntensity = (typeof DAILY_INTENSITIES)[number]
-export type Intensity = 1 | 2 | 3 | 4 | 5
+export type Intensity = 1 | 2 | 3
+
+export function convertLegacyIntensityToThreeLevels(value: number): Intensity {
+  return Math.max(1, Math.min(3, Math.round((value - 1) / 2) + 1)) as Intensity
+}
 
 export type PeriodDay = {
   day: number
@@ -139,8 +143,8 @@ export function assertValidNewPeriod(value: unknown): asserts value is NewPeriod
         throw new TypeError('Invalid headache value')
       for (const key of DAILY_INTENSITIES) {
         const level = entry[key]
-        if (level !== undefined && (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > 5)) {
-          throw new RangeError(`${key} must be an integer from 1 to 5`)
+        if (level !== undefined && (typeof level !== 'number' || !Number.isInteger(level) || level < 1 || level > 3)) {
+          throw new RangeError(`${key} must be an integer from 1 to 3`)
         }
       }
       seen.add(entry.day)

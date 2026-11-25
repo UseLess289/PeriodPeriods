@@ -36,6 +36,10 @@
   --color-accent-deep: #673833;
   --color-accent-soft: #eddcd4;
   --color-focus: #236970;
+  --phase-menstrual: #f34470;
+  --phase-follicular: #91c83c;
+  --phase-ovulatory: #d842a8;
+  --phase-luteal: #f18b2d;
   --color-primary-ink: #fffefa;
   --color-mark-ink: #fffefa;
   --color-error: #8b302d;
@@ -725,10 +729,10 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 .calendar-table td.has-estimated-period-day {
-  background: color-mix(in srgb, var(--color-error) 10%, var(--color-canvas));
+  background: color-mix(in srgb, var(--phase-menstrual) 10%, var(--color-canvas));
 }
 .calendar-table td.has-period-day {
-  background: color-mix(in srgb, var(--color-error) 22%, var(--color-canvas));
+  background: color-mix(in srgb, var(--phase-menstrual) 24%, var(--color-canvas));
 }
 .calendar-table td.is-today time > span:first-child {
   outline: 2px solid var(--color-focus);
@@ -861,7 +865,7 @@ h2 {
   height: 0.55rem;
   flex: 0 0 auto;
   border-radius: 0.14rem;
-  background: color-mix(in srgb, var(--color-error) 45%, var(--color-canvas));
+  background: color-mix(in srgb, var(--phase-menstrual) 55%, var(--color-canvas));
 }
 .calendar-today-mark {
   display: inline-block;
@@ -883,7 +887,7 @@ h2 {
   height: 0.55rem;
   border: 1px solid var(--color-control-border);
   border-radius: 0.14rem;
-  background: color-mix(in srgb, var(--color-error) 10%, var(--color-canvas));
+  background: color-mix(in srgb, var(--phase-menstrual) 16%, var(--color-canvas));
 }
 .forecast-bound-mark {
   display: inline-block;
@@ -906,6 +910,38 @@ h2 {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+.phase-calendar-legend {
+  margin-top: var(--space-2);
+}
+.phase-legend-swatch {
+  display: inline-block;
+  width: 0.95rem;
+  height: 0.62rem;
+  flex: 0 0 auto;
+  border-radius: 0.16rem;
+}
+.phase-legend-menstrual {
+  background: var(--phase-menstrual);
+}
+.phase-legend-follicular {
+  background: var(--phase-follicular);
+}
+.phase-legend-ovulatory {
+  background: var(--phase-ovulatory);
+}
+.phase-legend-luteal {
+  background: var(--phase-luteal);
+}
+.phase-legend-possible {
+  border: 1px solid var(--color-control-border);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--phase-menstrual) 24%, transparent),
+    color-mix(in srgb, var(--phase-follicular) 24%, transparent),
+    color-mix(in srgb, var(--phase-ovulatory) 24%, transparent),
+    color-mix(in srgb, var(--phase-luteal) 24%, transparent)
+  );
 }
 .calendar-empty-note {
   display: flex;
@@ -1226,13 +1262,14 @@ h2 {
 .bottom-nav {
   position: fixed;
   z-index: 5;
-  right: 0;
+  left: 50%;
   bottom: 0;
-  left: 0;
-  display: flex;
-  justify-content: center;
+  display: grid;
+  width: min(100%, 36rem);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.25rem;
-  padding: 0.65rem 1rem max(0.65rem, env(safe-area-inset-bottom));
+  padding: 0.5rem 0.75rem max(0.5rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
   border-top: 1px solid var(--color-line);
   background: var(--color-nav-material);
   backdrop-filter: blur(18px);
@@ -1535,24 +1572,25 @@ h2 {
   gap: 0.25rem;
   padding: 0.8rem;
   border-radius: var(--radius-sm);
-  background: var(--color-accent-soft);
+  background: color-mix(in srgb, var(--phase-menstrual) 18%, var(--color-canvas));
 }
 .phase-segment span {
   font-size: 0.8rem;
 }
 .phase-folliculaire {
-  background: var(--color-surface-soft);
+  background: color-mix(in srgb, var(--phase-follicular) 18%, var(--color-canvas));
 }
 .phase-ovulatoire {
-  background: var(--color-accent-soft);
+  background: color-mix(in srgb, var(--phase-ovulatory) 18%, var(--color-canvas));
 }
 .phase-lutéale {
-  background: var(--color-surface-soft);
+  background: color-mix(in srgb, var(--phase-luteal) 18%, var(--color-canvas));
 }
 .nav-button {
   display: grid;
-  min-width: 5.7rem;
-  min-height: 3rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.25rem;
   place-items: center;
   gap: 0.15rem;
   border: 0;

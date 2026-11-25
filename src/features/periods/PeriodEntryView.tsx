@@ -101,6 +101,12 @@ function EstimateMethodDetails({ locale }: { readonly locale: Locale }) {
             'With six or more intervals, the range uses the shortest and longest of those same six recent intervals. The earliest and latest dates are calculated by adding those lengths to the last past period start used in the estimate. The middle date is calculated by adding the rounded median to that same start. The range reflects the intervals you recorded and does not guarantee a future date. The estimated date does not shift automatically.',
           )}
         </p>
+        <p>
+          {text(
+            'Les phases colorées du calendrier sont des repères approximatifs. L’ovulation centrale est placée 14 jours avant le prochain début estimé; les teintes pâles montrent des dates possibles en tenant compte de la plage des cycles et d’une phase lutéale de 10 à 16 jours. La durée des prochaines règles utilise la médiane des six durées les plus récentes (ou de toutes les durées disponibles si elles sont moins nombreuses). Ces repères ne confirment pas l’ovulation et ne servent pas de contraception.',
+            'The colored calendar phases are approximate guides. Central ovulation is placed 14 days before the estimated next period; pale tints show possible dates based on the cycle range and a 10–16 day luteal phase. The upcoming period duration uses the median of the six most recent recorded durations, or all available durations if fewer than six exist. These dates do not confirm ovulation and are not for contraception.',
+          )}
+        </p>
       </div>
     </details>
   )

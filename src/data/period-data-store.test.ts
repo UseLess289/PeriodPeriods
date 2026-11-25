@@ -50,6 +50,40 @@ describe('period data store', () => {
     await expect(store.updatePeriod('legacy', { durationDays: 1 })).rejects.toThrow(/distinct days/)
   })
 
+  it('migrates saved daily ratings from five levels to the three-level scale', async () => {
+    const legacy = new Dexie(databaseName)
+    legacy.version(2).stores({ periods: 'id,&startDate', settings: 'key' })
+    await legacy.table('periods').add({
+      id: 'legacy-ratings',
+      startDate: '2025-03-08',
+      durationDays: 2,
+      dailyLogs: [
+        {
+          day: 1,
+          flowIntensity: 1,
+          headacheIntensity: 2,
+          crampsIntensity: 3,
+          fatigueIntensity: 5,
+        },
+      ],
+      createdAt: '2025-03-08T00:00:00.000Z',
+      updatedAt: '2025-03-08T00:00:00.000Z',
+    })
+    legacy.close()
+
+    await expect(store.getPeriod('legacy-ratings')).resolves.toMatchObject({
+      dailyLogs: [
+        {
+          day: 1,
+          flowIntensity: 1,
+          headacheIntensity: 2,
+          crampsIntensity: 2,
+          fatigueIntensity: 3,
+        },
+      ],
+    })
+  })
+
   it('keeps optional details independent from the caller input', async () => {
     const symptoms = ['fatigue']
     const input = { startDate: '2025-03-08', symptoms }
@@ -199,14 +233,14 @@ describe('period data store', () => {
     await expect(store.getSettings()).resolves.toEqual(settings)
   })
 
-  it('exports periods and current settings in the version 1 envelope', async () => {
+  it('exports periods and current settings in the version 2 envelope', async () => {
     const period = await store.addPeriod({ startDate: '2025-03-08', flow: 'medium' })
     const settings = { forecastMethod: 'mean-6', firstDayOfWeek: 0 } as const
     await store.saveSettings(settings)
 
     const backup = JSON.parse(await store.exportBackup())
 
-    expect(backup).toEqual({ version: 1, periods: [period], settings })
+    expect(backup).toEqual({ version: 2, periods: [period], settings })
   })
 
   it('restores the same periods and settings from its own export', async () => {
@@ -227,7 +261,7 @@ describe('period data store', () => {
   it('exports an empty backup with default settings', async () => {
     const backup = JSON.parse(await store.exportBackup())
     expect(backup).toEqual({
-      version: 1,
+      version: 2,
       periods: [],
       settings: { forecastMethod: 'median-6', firstDayOfWeek: 1 },
     })
@@ -246,6 +280,46 @@ describe('period data store', () => {
     await expect(store.getPeriod(existing.id)).resolves.toBeUndefined()
     await expect(store.getPeriods()).resolves.toEqual([])
     await expect(store.getSettings()).resolves.toEqual({ forecastMethod: 'median-6', firstDayOfWeek: 1 })
+  })
+
+  it('converts version 1 five-level ratings while importing a legacy backup', async () => {
+    const backup = JSON.stringify({
+      version: 1,
+      periods: [
+        {
+          id: 'legacy-ratings',
+          startDate: '2025-03-08',
+          durationDays: 1,
+          dailyLogs: [
+            {
+              day: 1,
+              flowIntensity: 1,
+              headacheIntensity: 2,
+              crampsIntensity: 3,
+              fatigueIntensity: 5,
+            },
+          ],
+          createdAt: '2025-03-08T00:00:00.000Z',
+          updatedAt: '2025-03-08T00:00:00.000Z',
+        },
+      ],
+      settings: { forecastMethod: 'median-6', firstDayOfWeek: 1 },
+    })
+
+    await store.importBackup(backup)
+
+    await expect(store.getPeriods()).resolves.toMatchObject([
+      {
+        dailyLogs: [
+          {
+            flowIntensity: 1,
+            headacheIntensity: 2,
+            crampsIntensity: 2,
+            fatigueIntensity: 3,
+          },
+        ],
+      },
+    ])
   })
 
   it('replaces local periods and settings when a valid backup is imported', async () => {
@@ -341,7 +415,7 @@ describe('period data store', () => {
   })
 
   it.each([
-    ['unknown version', { version: 2, periods: [], settings: { forecastMethod: 'median-6', firstDayOfWeek: 1 } }],
+    ['unknown version', { version: 3, periods: [], settings: { forecastMethod: 'median-6', firstDayOfWeek: 1 } }],
     [
       'unknown envelope key',
       { version: 1, periods: [], settings: { forecastMethod: 'median-6', firstDayOfWeek: 1 }, extra: true },

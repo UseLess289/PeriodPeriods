@@ -359,7 +359,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
         </main>
       </div>
 
-      {!isLoading && !loadError && periods !== null && (
+      {!isLoading && !loadError && periods !== null && activeView === 'home' && (
         <>
           <button
             className="floating-add"

@@ -140,8 +140,8 @@ export function StatsView({ periods, today, locale = 'fr' }: StatsViewProps) {
         <h2 id="stats-phases-title">{text('Quatre phases estimées', 'Four estimated phases')}</h2>
         <p>
           {text(
-            'Schéma théorique des quatre phases : seule la durée des règles est projetée depuis les durées saisies. Les autres frontières ne peuvent pas être datées avec les seules dates de règles. Ce schéma ne permet pas de déterminer une fenêtre contraceptive.',
-            'A theoretical diagram of four phases: only period length is projected from recorded lengths. The other boundaries cannot be dated from period dates alone. Do not use this diagram to identify a contraceptive window.',
+            'Schéma théorique des quatre phases : seule la durée des règles est projetée depuis les durées saisies. Les repères colorés du calendrier utilisent des conventions approximatives; les dates de règles seules ne permettent pas de confirmer les autres frontières. Ce schéma ne permet pas de déterminer une fenêtre contraceptive.',
+            'A theoretical diagram of four phases: only period length is projected from recorded lengths. Colored calendar markers use approximate conventions; period dates alone cannot confirm the other boundaries. Do not use this diagram to identify a contraceptive window.',
           )}
         </p>
         {phases.length === 0 ? (

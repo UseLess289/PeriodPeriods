@@ -279,7 +279,7 @@ test('sélectionne plusieurs débuts distincts, bloque les doublons et les dates
   expect(accessibility.violations).toEqual([])
 })
 
-test('exporte un fichier v1 et l’import valide remplace les dates et réglages après confirmation', async ({ page }) => {
+test('exporte une sauvegarde v2 et importe une sauvegarde valide après confirmation', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-03-27T12:00:00.000Z') })
   await page.goto('/')
   await recordStart(page, '2025-03-27')
@@ -292,7 +292,7 @@ test('exporte un fichier v1 et l’import valide remplace les dates et réglages
   const downloadPath = await download.path()
   expect(downloadPath).not.toBeNull()
   const exported = JSON.parse(await readFile(downloadPath!, 'utf8'))
-  expect(exported.version).toBe(1)
+  expect(exported.version).toBe(2)
   expect(exported.periods).toHaveLength(1)
   expect(exported.periods[0].startDate).toBe('2025-03-27')
   await expect(page.locator('#backup-export-status')).toContainText(/données personnelles et les réglages/i)
@@ -304,7 +304,7 @@ test('exporte un fichier v1 et l’import valide remplace les dates et réglages
     buffer: Buffer.from(JSON.stringify(replacement)),
   })
   await expect(page.getByRole('heading', { name: 'Aperçu de la sauvegarde' })).toBeVisible()
-  await expect(page.locator('.backup-preview')).toContainText('JSON v1')
+  await expect(page.locator('.backup-preview')).toContainText('JSON compatible')
   await expect(page.locator('.backup-preview')).toContainText('1 janvier 2025 au 27 mars 2025')
   await expect(page.getByText(/remplacera les dates et réglages actuellement enregistrés/i)).toBeVisible()
   const importPreviewAccessibility = await new AxeBuilder({ page }).analyze()
@@ -331,7 +331,9 @@ test('un fichier invalide ou un import annulé ne modifie pas les données actue
     mimeType: 'application/json',
     buffer: Buffer.from('{ ceci n’est pas du JSON'),
   })
-  await expect(page.getByRole('alert')).toContainText('Ce fichier ne correspond pas à une sauvegarde JSON v1 valide.')
+  await expect(page.getByRole('alert')).toContainText(
+    'Ce fichier ne correspond pas à une sauvegarde JSON v1 ou v2 valide.',
+  )
   await expect(page.getByRole('button', { name: 'Remplacer les données actuelles' })).toHaveCount(0)
   const invalidBackupAccessibility = await new AxeBuilder({ page }).analyze()
   expect(invalidBackupAccessibility.violations).toEqual([])

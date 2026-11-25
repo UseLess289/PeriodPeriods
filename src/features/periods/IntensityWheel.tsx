@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { Intensity } from '../../domain/periods'
 
-const levels = [0, 1, 2, 3, 4, 5] as const
+const levels = [0, 1, 2, 3] as const
 type WheelValue = (typeof levels)[number]
 
 type Props = {
@@ -51,13 +51,13 @@ export function IntensityWheel({ id, label, value, emptyLabel, previousValue, on
           aria-labelledby={`${id}-label`}
           aria-describedby="event-intensity-hint"
           aria-valuemin={0}
-          aria-valuemax={5}
+          aria-valuemax={3}
           aria-valuenow={current}
-          aria-valuetext={value ? `${value} / 5` : (previousValue ?? emptyLabel)}
+          aria-valuetext={value ? `${value} / 3` : (previousValue ?? emptyLabel)}
           onScroll={({ currentTarget: wheel }) => {
             const rowHeight = (wheel.firstElementChild as HTMLElement).getBoundingClientRect().height
             if (!rowHeight) return
-            const next = levels[Math.max(0, Math.min(5, Math.round(wheel.scrollTop / rowHeight)))]
+            const next = levels[Math.max(0, Math.min(3, Math.round(wheel.scrollTop / rowHeight)))]
             if (next !== current) onChange(next || undefined)
           }}
           onKeyDown={(event) => {
@@ -75,7 +75,7 @@ export function IntensityWheel({ id, label, value, emptyLabel, previousValue, on
                 next = 0
                 break
               case 'End':
-                next = 5
+                next = 3
                 break
               case 'Enter':
                 event.preventDefault()
