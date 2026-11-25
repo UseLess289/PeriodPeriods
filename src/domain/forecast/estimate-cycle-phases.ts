@@ -1,5 +1,5 @@
-import { addCivilDays } from '../dates'
-import { getPeriodDuration } from '../periods'
+import { tryAddCivilDays } from '../dates'
+import { daysBetweenCivilDates, getPeriodDuration } from '../periods'
 import type { CivilDate, Period } from '../periods'
 import type { PeriodStartEstimate } from './estimate-next-period'
 
@@ -19,15 +19,16 @@ export type CyclePhaseRanges = Record<
   }
 >
 
-function dateRange(startDate: CivilDate, endDate: CivilDate): CivilDateRange | null {
-  return startDate <= endDate ? { startDate, endDate } : null
+function dateRange(startDate: CivilDate | null, endDate: CivilDate | null): CivilDateRange | null {
+  return startDate && endDate && startDate <= endDate ? { startDate, endDate } : null
 }
 
 function medianRounded(values: number[]): number {
   const sorted = [...values].sort((left, right) => left - right)
   const middle = Math.floor(sorted.length / 2)
-  const median = sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
-  return Math.floor(median + 0.5)
+  return sorted.length % 2 === 1
+    ? sorted[middle]
+    : sorted[middle - 1] + Math.ceil((sorted[middle] - sorted[middle - 1]) / 2)
 }
 
 export function estimateCyclePhaseRanges(
@@ -40,45 +41,71 @@ export function estimateCyclePhaseRanges(
     .sort((left, right) => left.startDate.localeCompare(right.startDate))
   const lastPeriod = recordedPeriods.at(-1)
   if (!lastPeriod) return null
+  const duration = getPeriodDuration(lastPeriod)
+  const centralCycleLength = daysBetweenCivilDates(lastPeriod.startDate, estimate.predictedStartDate)
+  if (duration > centralCycleLength) return null
 
   const recentDurations = recordedPeriods.slice(-6).map(getPeriodDuration)
   const predictedPeriodDuration = medianRounded(recentDurations)
   const earliestNextStart =
     estimate.kind === 'range'
       ? estimate.earliestStartDate
-      : addCivilDays(estimate.predictedStartDate, -estimate.uncertaintyDays)
+      : tryAddCivilDays(estimate.predictedStartDate, -estimate.uncertaintyDays)
   const latestNextStart =
     estimate.kind === 'range'
       ? estimate.latestStartDate
-      : addCivilDays(estimate.predictedStartDate, estimate.uncertaintyDays)
+      : tryAddCivilDays(estimate.predictedStartDate, estimate.uncertaintyDays)
 
   // The central ovulation marker uses the conventional 14-day luteal estimate.
   // The lighter range combines the cycle-start spread with a 10–16 day luteal span.
-  const expectedOvulation = addCivilDays(estimate.predictedStartDate, -14)
-  const earliestPossibleOvulation = addCivilDays(earliestNextStart, -16)
-  const latestPossibleOvulation = addCivilDays(latestNextStart, -10)
-  const lastRecordedBleedEnd = addCivilDays(lastPeriod.startDate, getPeriodDuration(lastPeriod) - 1)
-  const follicularStart = addCivilDays(lastRecordedBleedEnd, 1)
+  const follicularStart = tryAddCivilDays(lastPeriod.startDate, duration)
+  const expectedOvulation = tryAddCivilDays(estimate.predictedStartDate, -14)
+  const coherentOvulation = follicularStart && expectedOvulation && expectedOvulation > follicularStart
+  const earliestOvulation = earliestNextStart && tryAddCivilDays(earliestNextStart, -16)
+  const latestPossibleOvulation = latestNextStart && tryAddCivilDays(latestNextStart, -10)
+  const firstOvulation = follicularStart && tryAddCivilDays(follicularStart, 1)
+  const earliestPossibleOvulation =
+    earliestOvulation && firstOvulation
+      ? earliestOvulation < firstOvulation
+        ? firstOvulation
+        : earliestOvulation
+      : null
+  const coherentPossibleOvulation =
+    coherentOvulation &&
+    earliestPossibleOvulation &&
+    latestPossibleOvulation &&
+    earliestPossibleOvulation <= latestPossibleOvulation
+  const coherentPossibleStart = earliestNextStart && follicularStart && earliestNextStart >= follicularStart
 
   return {
     menstrual: {
       expected: dateRange(
         estimate.predictedStartDate,
-        addCivilDays(estimate.predictedStartDate, predictedPeriodDuration - 1),
+        tryAddCivilDays(estimate.predictedStartDate, predictedPeriodDuration - 1),
       ),
-      possible: dateRange(earliestNextStart, addCivilDays(latestNextStart, predictedPeriodDuration - 1)),
+      possible:
+        coherentPossibleStart && latestNextStart
+          ? dateRange(earliestNextStart, tryAddCivilDays(latestNextStart, predictedPeriodDuration - 1))
+          : null,
     },
     follicular: {
-      expected: dateRange(follicularStart, addCivilDays(expectedOvulation, -1)),
-      possible: dateRange(follicularStart, addCivilDays(latestPossibleOvulation, -1)),
+      expected: coherentOvulation ? dateRange(follicularStart, tryAddCivilDays(expectedOvulation, -1)) : null,
+      possible: coherentPossibleOvulation
+        ? dateRange(follicularStart, tryAddCivilDays(latestPossibleOvulation, -1))
+        : null,
     },
     ovulatory: {
-      expected: dateRange(expectedOvulation, expectedOvulation),
-      possible: dateRange(earliestPossibleOvulation, latestPossibleOvulation),
+      expected: coherentOvulation ? dateRange(expectedOvulation, expectedOvulation) : null,
+      possible: coherentPossibleOvulation ? dateRange(earliestPossibleOvulation, latestPossibleOvulation) : null,
     },
     luteal: {
-      expected: dateRange(addCivilDays(expectedOvulation, 1), addCivilDays(estimate.predictedStartDate, -1)),
-      possible: dateRange(addCivilDays(earliestPossibleOvulation, 1), addCivilDays(latestNextStart, -1)),
+      expected: coherentOvulation
+        ? dateRange(tryAddCivilDays(expectedOvulation, 1), tryAddCivilDays(estimate.predictedStartDate, -1))
+        : null,
+      possible:
+        coherentPossibleOvulation && latestNextStart
+          ? dateRange(tryAddCivilDays(earliestPossibleOvulation, 1), tryAddCivilDays(latestNextStart, -1))
+          : null,
     },
   }
 }

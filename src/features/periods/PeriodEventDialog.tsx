@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent, ReactNode } from 'react'
 import { AnimatePresence, motion, useIsPresent, usePresenceData, useReducedMotion } from 'motion/react'
-import { addCivilDays } from '../../domain/dates'
-import { DEFAULT_PERIOD_DURATION, getPeriodDuration, pickDailyIntensities } from '../../domain/periods'
+import { tryAddCivilDays } from '../../domain/dates'
+import { DEFAULT_PERIOD_DURATION, getPeriodDuration, hasDailyObservation } from '../../domain/periods'
 import type { CivilDate, DailyIntensity, Intensity, NewPeriod, Period, PeriodDay } from '../../domain/periods'
 import { formatCivilDate } from '../shared/format-civil-date'
 import type { Locale } from '../shared/format-civil-date'
@@ -13,14 +13,16 @@ type Props = {
   open: boolean
   today: CivilDate
   initialStartDate: CivilDate
-  periods: readonly Period[]
+  period?: Period
   onClose: () => void
   onSave: (event: NewPeriod) => Promise<string | null>
+  onDelete: (id: string) => Promise<string | null>
 }
 
 // Includes the known errors returned by the app's save callback.
 const englishErrors = new Map([
   ['Une date future ne peut pas être enregistrée.', 'A future date cannot be recorded.'],
+  ['Un début est déjà enregistré pour cette date.', 'A period start is already recorded for this date.'],
   ['L’enregistrement a échoué. Vérifie les données et réessaie.', 'Could not save. Check the details and try again.'],
 ])
 
@@ -53,7 +55,16 @@ function AnimatedStepPanel({ reducedMotion, children }: { reducedMotion: boolean
   )
 }
 
-export function PeriodEventDialog({ open, today, initialStartDate, periods, onClose, onSave, locale = 'fr' }: Props) {
+export function PeriodEventDialog({
+  open,
+  today,
+  initialStartDate,
+  period,
+  onClose,
+  onSave,
+  onDelete,
+  locale = 'fr',
+}: Props) {
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
   const dialog = useRef<HTMLDialogElement>(null)
   const form = useRef<HTMLFormElement>(null)
@@ -66,13 +77,14 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
   )
   const [step, setStep] = useState<1 | 2>(1)
   const [stepDirection, setStepDirection] = useState(1)
-  const initialEntry = periods.find((period) => period.startDate === initialStartDate)
   const [startDate, setStartDate] = useState(initialStartDate)
   const saveButton = useRef<HTMLButtonElement>(null)
-  const [durationDays, setDuration] = useState(() =>
-    initialEntry ? getPeriodDuration(initialEntry) : DEFAULT_PERIOD_DURATION,
-  )
-  const [dailyLogs, setDailyLogs] = useState<PeriodDay[]>(() => initialEntry?.dailyLogs ?? [])
+  const deleteButton = useRef<HTMLButtonElement>(null)
+  const keepButton = useRef<HTMLButtonElement>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [durationDays, setDuration] = useState(() => (period ? getPeriodDuration(period) : DEFAULT_PERIOD_DURATION))
+  const [dailyLogs, setDailyLogs] = useState<PeriodDay[]>(() => period?.dailyLogs ?? [])
+  const [trackingEdited, setTrackingEdited] = useState(false)
   const [activeDay, setActiveDay] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [dateError, setDateError] = useState(false)
@@ -93,10 +105,11 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
     if (!element) return
     if (open && !element.open) {
       element.showModal()
-      const initialPeriod = periods.find((period) => period.startDate === initialStartDate)
       setStartDate(initialStartDate)
-      setDuration(initialPeriod ? getPeriodDuration(initialPeriod) : DEFAULT_PERIOD_DURATION)
-      setDailyLogs(initialPeriod?.dailyLogs ?? [])
+      setDuration(period ? getPeriodDuration(period) : DEFAULT_PERIOD_DURATION)
+      setDailyLogs(period?.dailyLogs ?? [])
+      setTrackingEdited(false)
+      setConfirmingDelete(false)
       setActiveDay(1)
       setError(null)
       setDateError(false)
@@ -108,12 +121,11 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
       else saveButton.current?.focus({ preventScroll: true })
     }
     if (!open && element.open) element.close()
-  }, [initialStartDate, isMobileViewport, open, periods])
+  }, [initialStartDate, isMobileViewport, open, period])
 
-  const existing = periods.find((period) => period.startDate === startDate)
-  const minimumDuration = Math.max(1, ...dailyLogs.map(({ day }) => day))
-  const maximumDuration = Math.max(14, existing ? getPeriodDuration(existing) : 1)
-  const dayCount = Math.min(366, Number.isSafeInteger(durationDays) ? durationDays : 0)
+  const minimumDuration = dailyLogs.reduce((maximum, { day }) => Math.max(maximum, day), 1)
+  const maximumDuration = Math.max(14, period ? getPeriodDuration(period) : 1)
+  const dayCount = startDate ? Math.min(31, durationDays) : 0
   const selectedDay = Math.min(activeDay, dayCount)
   const dailyLog = dailyLogs.find(({ day }) => day === selectedDay)
   const metrics: { key: DailyIntensity; label: string; legacy?: string }[] = [
@@ -142,23 +154,38 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
 
   function changeStart(value: string) {
     setStartDate(value)
-    const period = periods.find((item) => item.startDate === value)
-    setDuration(period ? getPeriodDuration(period) : DEFAULT_PERIOD_DURATION)
-    setDailyLogs(period?.dailyLogs ?? [])
-    setActiveDay(1)
     setError(null)
     setDateError(false)
   }
 
   function close() {
     if (saving) return
-    changeStart(today)
+    if (confirmingDelete) {
+      setConfirmingDelete(false)
+      setError(null)
+      requestAnimationFrame(() => deleteButton.current?.focus({ preventScroll: true }))
+      return
+    }
     setStep(1)
     onClose()
   }
 
+  async function deletePeriod() {
+    if (!period || saving) return
+    setSaving(true)
+    setError(null)
+    const issue = await onDelete(period.id)
+    setSaving(false)
+    if (issue) {
+      setError(issue)
+      requestAnimationFrame(() => keepButton.current?.focus({ preventScroll: true }))
+    } else {
+      onClose()
+    }
+  }
+
   function validatePeriod() {
-    if (!startDate || startDate > today) {
+    if (startDate.length !== 10 || startDate > today) {
       setDateError(true)
       setError(
         !startDate
@@ -229,13 +256,12 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
   }
 
   function updateDay(metric: DailyIntensity, value: Intensity | undefined) {
+    setTrackingEdited(true)
     setDailyLogs((logs) => {
       const entry = { ...logs.find(({ day }) => day === selectedDay), day: selectedDay, [metric]: value }
       if (metric === 'flowIntensity') delete entry.flow
       if (metric === 'headacheIntensity') delete entry.headache
-      const hasObservations =
-        entry.flow !== undefined || entry.headache !== undefined || Object.keys(pickDailyIntensities(entry)).length > 0
-      return [...logs.filter(({ day }) => day !== selectedDay), ...(hasObservations ? [entry] : [])].sort(
+      return [...logs.filter(({ day }) => day !== selectedDay), ...(hasDailyObservation(entry) ? [entry] : [])].sort(
         (left, right) => left.day - right.day,
       )
     })
@@ -253,15 +279,21 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
     const issue = await onSave({
       startDate,
       durationDays,
-      dailyLogs,
-      symptoms: existing?.symptoms,
+      ...(trackingEdited ? { dailyLogs } : {}),
     })
     setSaving(false)
     if (issue) {
-      setDateError(issue === 'Une date future ne peut pas être enregistrée.')
+      const invalidDate =
+        issue === 'Une date future ne peut pas être enregistrée.' ||
+        issue === 'Un début est déjà enregistré pour cette date.'
+      setDateError(invalidDate)
       setError(issue)
+      if (invalidDate && step === 2) {
+        setStepDirection(-1)
+        setStep(1)
+      }
       requestAnimationFrame(() => {
-        if (issue === 'Une date future ne peut pas être enregistrée.') {
+        if (invalidDate) {
           startDateInput.current?.focus()
         } else {
           saveButton.current?.focus()
@@ -269,16 +301,11 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
       })
       return
     }
-    const todayPeriod = startDate === today ? { durationDays, dailyLogs } : null
-    changeStart(today)
-    if (todayPeriod) {
-      setDuration(todayPeriod.durationDays)
-      setDailyLogs(todayPeriod.dailyLogs)
-    }
     onClose()
   }
 
   function renderDayTracking() {
+    const selectedDate = tryAddCivilDays(startDate, selectedDay - 1)
     return dayCount > 0 ? (
       <>
         <div className="event-day-heading">
@@ -290,13 +317,32 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
             value={selectedDay}
             onChange={(event) => setActiveDay(Number(event.target.value))}
           >
-            {Array.from({ length: dayCount }, (_, index) => (
-              <option key={index} value={index + 1}>
-                {text(`Jour ${index + 1}`, `Day ${index + 1}`)} –{' '}
-                {formatCivilDate(addCivilDays(startDate, index), locale)}
-              </option>
-            ))}
+            {Array.from({ length: dayCount }, (_, index) => {
+              const day = tryAddCivilDays(startDate, index)
+              return (
+                <option key={index} value={index + 1}>
+                  {text(`Jour ${index + 1}`, `Day ${index + 1}`)}
+                  {day ? ` – ${formatCivilDate(day, locale)}${day > today ? text(' (à venir)', ' (future)') : ''}` : ''}
+                </option>
+              )
+            })}
           </select>
+          {selectedDate && selectedDate > today && (
+            <p className="field-hint">
+              {text(
+                'Ce jour est à venir. Les valeurs saisies ne sont pas comptées comme des observations.',
+                'This day is in the future. Any entries are not counted as observations.',
+              )}
+            </p>
+          )}
+          {durationDays > dayCount && (
+            <p className="field-hint">
+              {text(
+                'Les 31 premiers jours sont modifiables ici. Les autres jours restent conservés.',
+                'Edit the first 31 days here. Later days remain stored.',
+              )}
+            </p>
+          )}
         </div>
         <div className="event-intensity-grid">
           {metrics.map(({ key, label, legacy }) => (
@@ -371,6 +417,29 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
               )}
             </p>
           )}
+          {!period && (
+            <p className="field-hint">
+              {text(
+                'La durée par défaut de 5 jours est une hypothèse, pas un suivi quotidien.',
+                'The 5-day default is an assumption, not a daily observation.',
+              )}
+            </p>
+          )}
+          {period && (
+            <button
+              className="secondary-button"
+              ref={deleteButton}
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                setConfirmingDelete(true)
+                setError(null)
+                requestAnimationFrame(() => keepButton.current?.focus({ preventScroll: true }))
+              }}
+            >
+              {text('Supprimer cette période', 'Delete this period')}
+            </button>
+          )}
         </div>
       </>
     )
@@ -394,6 +463,7 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
       className="event-dialog"
       data-has-error={Boolean(errorMessage)}
       aria-labelledby="event-dialog-title"
+      aria-describedby={confirmingDelete ? 'event-delete-warning' : undefined}
       onCancel={(event) => {
         event.preventDefault()
         close()
@@ -403,108 +473,131 @@ export function PeriodEventDialog({ open, today, initialStartDate, periods, onCl
       }}
       onKeyDown={keepFocusInDialog}
     >
-      <form id="period-event-form" ref={form} onSubmit={submit} noValidate>
-        <div className="event-dialog-heading">
-          <h2 id="event-dialog-title" ref={dialogTitle} tabIndex={-1}>
-            {isMobileViewport && step === 2
-              ? text('Maux et symptômes', 'Symptoms and notes')
-              : existing
-                ? text('Compléter une période', 'Edit period details')
-                : text('Enregistrer une période', 'Record a period')}
-          </h2>
-          <button className="text-button" type="button" disabled={saving} onClick={close}>
-            {text('Annuler', 'Cancel')}
-          </button>
-        </div>
-        <div className="event-dialog-content" ref={dialogContent}>
-          <p id="event-intensity-hint" className="visually-hidden">
-            {isMobileViewport
-              ? text(
-                  'Choisis une intensité de 1 à 3, ou « Pas noté ».',
-                  'Choose an intensity from 1 to 3, or “Not logged”.',
-                )
-              : text(
-                  'Choisis une intensité de 1 à 3, ou « Non renseigné ». Pour la molette, défile ou utilise les touches fléchées.',
-                  'Choose an intensity from 1 to 3, or “Not logged”. For the wheel, scroll or use the arrow keys.',
-                )}
+      {confirmingDelete && period ? (
+        <section className="event-delete-confirmation">
+          <h2 id="event-dialog-title">{text('Supprimer cette période ?', 'Delete this period?')}</h2>
+          <p id="event-delete-warning">
+            {text(
+              `La période débutée le ${formatCivilDate(period.startDate, locale)} et toutes ses observations seront supprimées. Cette action est définitive.`,
+              `The period starting ${formatCivilDate(period.startDate, locale)} and all its observations will be deleted. This cannot be undone.`,
+            )}
           </p>
-          {isMobileViewport ? (
-            <>
-              <p className="event-step-progress">
-                {step === 1
-                  ? text('Étape 1 sur 2 · Date et durée', 'Step 1 of 2 · Date and duration')
-                  : text('Étape 2 sur 2 · Maux', 'Step 2 of 2 · Symptoms')}
-                <span className="event-step-progress-track" aria-hidden="true">
-                  <span className={step === 1 ? 'is-first-step' : 'is-second-step'} />
-                </span>
-              </p>
-              <div className="event-step-stack">
-                <AnimatePresence initial={false} custom={stepDirection}>
-                  <AnimatedStepPanel key={`mobile-step-${step}`} reducedMotion={Boolean(prefersReducedMotion)}>
-                    {step === 1 ? (
-                      renderPeriodFields()
-                    ) : (
-                      <>
-                        <button className="text-button event-step-back" type="button" onClick={goToPeriod}>
-                          {text('Retour à la période', 'Back to period')}
-                        </button>
-                        <p className="event-step-description">
-                          {text(
-                            'Ajoute les observations de chaque jour. Tu peux aussi valider sans en ajouter.',
-                            'Add observations for each day, or validate without adding any.',
-                          )}
-                        </p>
-                        <p className="event-period-context">
-                          {text(
-                            `${formatCivilDate(startDate, locale)} · ${durationDays} ${durationDays === 1 ? 'jour' : 'jours'}`,
-                            `${formatCivilDate(startDate, locale)} · ${durationDays} ${durationDays === 1 ? 'day' : 'days'}`,
-                          )}
-                        </p>
-                        {renderDayTracking()}
-                        {Boolean(existing?.symptoms?.length) && (
-                          <p className="event-legacy-symptoms field-hint">
-                            {text('Anciens symptômes :', 'Previous symptoms:')} {existing?.symptoms?.join(', ')}
-                          </p>
-                        )}
-                      </>
+          {errorRegion}
+          <div className="backup-confirmation-actions">
+            <button ref={keepButton} className="secondary-button" type="button" disabled={saving} onClick={close}>
+              {text('Garder la période', 'Keep period')}
+            </button>
+            <button className="primary-button" type="button" disabled={saving} onClick={deletePeriod}>
+              {saving ? text('Suppression…', 'Deleting…') : text('Confirmer la suppression', 'Confirm deletion')}
+            </button>
+          </div>
+        </section>
+      ) : (
+        <>
+          <form id="period-event-form" ref={form} onSubmit={submit} noValidate>
+            <div className="event-dialog-heading">
+              <h2 id="event-dialog-title" ref={dialogTitle} tabIndex={-1}>
+                {isMobileViewport && step === 2
+                  ? text('Maux et symptômes', 'Symptoms and notes')
+                  : period
+                    ? text('Compléter une période', 'Edit period details')
+                    : text('Enregistrer une période', 'Record a period')}
+              </h2>
+              <button className="text-button" type="button" disabled={saving} onClick={close}>
+                {text('Annuler', 'Cancel')}
+              </button>
+            </div>
+            <div className="event-dialog-content" ref={dialogContent}>
+              <p id="event-intensity-hint" className="visually-hidden">
+                {isMobileViewport
+                  ? text(
+                      'Choisis une intensité de 1 à 3, ou « Pas noté ».',
+                      'Choose an intensity from 1 to 3, or “Not logged”.',
+                    )
+                  : text(
+                      'Choisis une intensité de 1 à 3, ou « Non renseigné ». Pour la molette, défile ou utilise les touches fléchées.',
+                      'Choose an intensity from 1 to 3, or “Not logged”. For the wheel, scroll or use the arrow keys.',
                     )}
-                  </AnimatedStepPanel>
-                </AnimatePresence>
-              </div>
-            </>
-          ) : (
-            <>
-              {renderPeriodFields()}
-              {renderDayTracking()}
-              {Boolean(existing?.symptoms?.length) && (
-                <p className="event-legacy-symptoms field-hint">
-                  {text('Anciens symptômes :', 'Previous symptoms:')} {existing?.symptoms?.join(', ')}
-                </p>
+              </p>
+              {isMobileViewport ? (
+                <>
+                  <p className="event-step-progress">
+                    {step === 1
+                      ? text('Étape 1 sur 2 · Date et durée', 'Step 1 of 2 · Date and duration')
+                      : text('Étape 2 sur 2 · Maux', 'Step 2 of 2 · Symptoms')}
+                    <span className="event-step-progress-track" aria-hidden="true">
+                      <span className={step === 1 ? 'is-first-step' : 'is-second-step'} />
+                    </span>
+                  </p>
+                  <div className="event-step-stack">
+                    <AnimatePresence initial={false} custom={stepDirection}>
+                      <AnimatedStepPanel key={`mobile-step-${step}`} reducedMotion={Boolean(prefersReducedMotion)}>
+                        {step === 1 ? (
+                          renderPeriodFields()
+                        ) : (
+                          <>
+                            <button className="text-button event-step-back" type="button" onClick={goToPeriod}>
+                              {text('Retour à la période', 'Back to period')}
+                            </button>
+                            <p className="event-step-description">
+                              {text(
+                                'Ajoute les observations de chaque jour. Tu peux aussi valider sans en ajouter.',
+                                'Add observations for each day, or validate without adding any.',
+                              )}
+                            </p>
+                            <p className="event-period-context">
+                              {text(
+                                `${formatCivilDate(startDate, locale)} · ${durationDays} ${durationDays === 1 ? 'jour' : 'jours'}`,
+                                `${formatCivilDate(startDate, locale)} · ${durationDays} ${durationDays === 1 ? 'day' : 'days'}`,
+                              )}
+                            </p>
+                            {renderDayTracking()}
+                            {Boolean(period?.symptoms?.length) && (
+                              <p className="event-legacy-symptoms field-hint">
+                                {text('Anciens symptômes :', 'Previous symptoms:')} {period?.symptoms?.join(', ')}
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </AnimatedStepPanel>
+                    </AnimatePresence>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {renderPeriodFields()}
+                  {renderDayTracking()}
+                  {Boolean(period?.symptoms?.length) && (
+                    <p className="event-legacy-symptoms field-hint">
+                      {text('Anciens symptômes :', 'Previous symptoms:')} {period?.symptoms?.join(', ')}
+                    </p>
+                  )}
+                </>
               )}
-            </>
-          )}
-          {!isMobileViewport && errorRegion}
-        </div>
-      </form>
-      {isMobileViewport && <div className="event-dialog-actions">{errorRegion}</div>}
-      <button
-        ref={saveButton}
-        className="floating-add event-save"
-        type={isMobileViewport ? 'button' : 'submit'}
-        form="period-event-form"
-        disabled={saving}
-        onClick={isMobileViewport ? advanceOrSave : undefined}
-      >
-        {isMobileViewport
-          ? step === 1
-            ? text('Suivant', 'Next')
-            : saving
-              ? text('Validation…', 'Saving…')
-              : text('Valider', 'Validate')
-          : saving
-            ? text('Enregistrement…', 'Saving…')
-            : text('Enregistrer', 'Save')}
-      </button>
+              {!isMobileViewport && errorRegion}
+            </div>
+          </form>
+          {isMobileViewport && <div className="event-dialog-actions">{errorRegion}</div>}
+          <button
+            ref={saveButton}
+            className="floating-add event-save"
+            type={isMobileViewport ? 'button' : 'submit'}
+            form="period-event-form"
+            disabled={saving}
+            onClick={isMobileViewport ? advanceOrSave : undefined}
+          >
+            {isMobileViewport
+              ? step === 1
+                ? text('Suivant', 'Next')
+                : saving
+                  ? text('Validation…', 'Saving…')
+                  : text('Valider', 'Validate')
+              : saving
+                ? text('Enregistrement…', 'Saving…')
+                : text('Enregistrer', 'Save')}
+          </button>
+        </>
+      )}
     </dialog>
   )
 }

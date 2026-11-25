@@ -1,8 +1,8 @@
 # 05 — Construire la page Statistiques et ses graphiques
 
-**Statut :** spécification en cours. **Bloqué par :** 01, 02, 03, 04.
+**Statut :** spécification en cours. Les projections sur un an sont reportées hors v1.
 
-**Résultat attendu :** consulter les cycles observés, les tendances, les projections et quatre **phases estimées** (menstruelle, folliculaire, ovulatoire, lutéale) dans une page dédiée. Les graphiques s'inspirent de Drip ; les repères et les tons roses pastel s'accordent à la direction Apple Calendrier choisie pour les deux thèmes. Les couleurs doivent rester lisibles sans perception des couleurs.
+**Résultat attendu en v1 :** consulter les intervalles entre débuts et les observations quotidiennes dans une page dédiée. Les phases estimées sont des repères du calendrier sur Accueil, pas des observations de Statistiques. Les graphiques s'inspirent de Drip ; les tons roses pastel s'accordent aux deux thèmes et restent lisibles sans perception des couleurs.
 
 ## Contenu à spécifier
 

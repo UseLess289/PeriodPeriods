@@ -23,6 +23,17 @@ export function addCivilDays(date: CivilDate, dayOffset: number): CivilDate {
   return toCivilDate(shifted)
 }
 
+/** Derived dates may fall beyond the supported four-digit civil calendar. */
+export function tryAddCivilDays(date: CivilDate, dayOffset: number): CivilDate | null {
+  if (!Number.isSafeInteger(dayOffset)) return null
+  try {
+    const shifted = addCivilDays(date, dayOffset)
+    return /^\d{4}-\d{2}-\d{2}$/.test(shifted) ? shifted : null
+  } catch {
+    return null
+  }
+}
+
 export function shiftCalendarMonth(date: CivilDate, monthOffset: number): CivilDate {
   if (!Number.isInteger(monthOffset)) throw new TypeError('monthOffset must be an integer')
 

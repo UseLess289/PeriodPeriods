@@ -710,6 +710,12 @@ h2 {
 .calendar-table td.has-period-day {
   background: color-mix(in srgb, var(--phase-menstrual) 24%, var(--color-canvas));
 }
+.calendar-table td.has-duration-guide {
+  background: color-mix(in srgb, var(--phase-menstrual) 10%, var(--color-canvas));
+}
+.calendar-table td.has-duration-guide .calendar-day-number {
+  border: 1px dashed var(--color-control-border);
+}
 .calendar-table td.is-today time > span:first-child {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
@@ -877,6 +883,14 @@ h2 {
   flex: 0 0 auto;
   border-radius: 0.14rem;
   background: color-mix(in srgb, var(--phase-menstrual) 55%, var(--color-canvas));
+}
+.duration-guide-mark {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.55rem;
+  flex: 0 0 auto;
+  border: 1px dashed var(--color-control-border);
+  border-radius: 0.14rem;
 }
 .calendar-today-mark {
   display: inline-block;
@@ -1401,6 +1415,20 @@ h2 {
 .event-dialog::backdrop {
   background: rgb(22 15 20 / 0.65);
 }
+.event-delete-confirmation {
+  display: grid;
+  gap: var(--space-3);
+  width: min(100%, 26rem);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: clamp(var(--space-3), 4vw, var(--space-4));
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.event-delete-confirmation button {
+  white-space: normal;
+}
 .event-dialog form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
@@ -1643,6 +1671,9 @@ h2 {
     align-items: center;
     justify-content: flex-end;
     gap: var(--space-2);
+  }
+  .event-delete-confirmation {
+    margin-block-end: max(var(--space-2), env(safe-area-inset-bottom));
   }
   .event-dialog form {
     display: flex;
@@ -2330,6 +2361,19 @@ h2 {
 }
 .stats-history-toggle:hover {
   background: var(--color-accent-soft);
+}
+.data-page-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+.stats-row-duration {
+  display: block;
+  margin-block-start: 0.2rem;
+  color: var(--color-muted);
+  font-weight: 400;
 }
 .stats-empty {
   max-width: 35rem;

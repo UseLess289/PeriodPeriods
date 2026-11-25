@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import type { PeriodDataStore } from '../../data/period-data-store'
+import { DuplicatePeriodStartError, type PeriodDataStore } from '../../data/period-data-store'
 import { parsePeriodBackup } from '../../data/period-backup'
 import type { PeriodBackupV2 } from '../../data/period-backup'
 import type { PeriodCsvPreview } from '../../data/period-data-store'
 import { formatCivilDate } from '../shared/format-civil-date'
+
+const MAX_IMPORT_FILE_SIZE = 10 * 1024 * 1024
 
 type BackupSettingsViewProps = {
   store: PeriodDataStore
@@ -13,86 +15,199 @@ type BackupSettingsViewProps = {
   locale?: 'fr' | 'en'
 }
 
-function getBackupDateSummary(backup: PeriodBackupV2): string | null {
-  const dates = backup.periods.map(({ startDate }) => startDate).sort()
-  if (dates.length === 0) return null
-  if (dates.length === 1) return formatCivilDate(dates[0])
-  return `${formatCivilDate(dates[0])} au ${formatCivilDate(dates.at(-1)!)}`
+function getDateSummary(periods: PeriodBackupV2['periods'] | PeriodCsvPreview['periods'], locale: 'fr' | 'en') {
+  if (periods.length === 0) return null
+  let first = periods[0].startDate
+  let last = first
+  for (const { startDate } of periods) {
+    if (startDate < first) first = startDate
+    if (startDate > last) last = startDate
+  }
+  return first === last
+    ? formatCivilDate(first, locale)
+    : `${formatCivilDate(first, locale)}${locale === 'en' ? ' to ' : ' au '}${formatCivilDate(last, locale)}`
 }
 
+type BackupSelection = { name: string; review?: { contents: string; preview: PeriodBackupV2 } }
+type FileSelection = { name: string; review?: { contents: string; preview: PeriodCsvPreview; format: 'csv' | 'flo' } }
+
 export function BackupSettingsView({ store, onImported, onBackupExported, locale = 'fr' }: BackupSettingsViewProps) {
-  const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
+  const text = useCallback((fr: string, en: string) => (locale === 'en' ? en : fr), [locale])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const fileButtonRef = useRef<HTMLButtonElement>(null)
   const csvFileInputRef = useRef<HTMLInputElement>(null)
   const csvFileButtonRef = useRef<HTMLButtonElement>(null)
-  const [preview, setPreview] = useState<PeriodBackupV2 | null>(null)
-  const [backupJson, setBackupJson] = useState<string | null>(null)
-  const [selectedFileName, setSelectedFileName] = useState('')
+  const backupConfirmButtonRef = useRef<HTMLButtonElement>(null)
+  const csvConfirmButtonRef = useRef<HTMLButtonElement>(null)
+
+  // A single token shared by both pickers. Every new selection or cancellation
+  // (including an OS picker cancel, which yields no file) bumps it, so any
+  // in-flight read from an older selection is discarded after it resolves.
+  const selectionToken = useRef(0)
+  const commitPending = useRef(false)
+
+  const [backupSelection, setBackupSelection] = useState<BackupSelection | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportMessage, setExportMessage] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
   const [importMessage, setImportMessage] = useState('')
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
-  const [csvText, setCsvText] = useState<string | null>(null)
-  const [importFormat, setImportFormat] = useState<'csv' | 'flo'>('csv')
-  const [csvPreview, setCsvPreview] = useState<PeriodCsvPreview | null>(null)
+  const [isReadingBackup, setIsReadingBackup] = useState(false)
+
+  const [fileSelection, setFileSelection] = useState<FileSelection | null>(null)
   const [csvMessage, setCsvMessage] = useState('')
   const [csvError, setCsvError] = useState('')
   const [isCsvImporting, setIsCsvImporting] = useState(false)
-  const [csvSelectedFileName, setCsvSelectedFileName] = useState('')
+  const [isReadingCsv, setIsReadingCsv] = useState(false)
+  const preview = backupSelection?.review?.preview
+  const csvPreview = fileSelection?.review?.preview
+  const importFormat = fileSelection?.review?.format
+  const busy = isImporting || isCsvImporting
+
+  // Invalidates any pending read in either picker and clears their busy flags.
+  const beginSelection = useCallback((): number => {
+    setBackupSelection(null)
+    setFileSelection(null)
+    setIsReadingBackup(false)
+    setIsReadingCsv(false)
+    setImportError(null)
+    setImportMessage('')
+    setCsvError('')
+    setCsvMessage('')
+    selectionToken.current += 1
+    return selectionToken.current
+  }, [])
+
+  async function readBackupFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    if (commitPending.current) return
+    const token = beginSelection()
+    if (!file) return
+    setBackupSelection({ name: file.name })
+
+    if (file.size > MAX_IMPORT_FILE_SIZE) {
+      setImportError(
+        text(
+          'Ce fichier dépasse la limite de 10 Mio. Aucune donnée n’a été modifiée.',
+          'This file exceeds the 10 MiB limit. No data was changed.',
+        ),
+      )
+      return
+    }
+
+    setIsReadingBackup(true)
+    try {
+      const json = await file.text()
+      if (selectionToken.current !== token) return
+      setBackupSelection({ name: file.name, review: { contents: json, preview: parsePeriodBackup(json) } })
+    } catch {
+      if (selectionToken.current !== token) return
+      setImportError(
+        text(
+          'Ce fichier ne correspond pas à une sauvegarde JSON v1 ou v2 valide. Choisis une autre sauvegarde.',
+          'This is not a valid JSON v1 or v2 backup. Choose another file.',
+        ),
+      )
+    } finally {
+      if (selectionToken.current === token) setIsReadingBackup(false)
+    }
+  }
 
   async function readCsvFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0]
     event.currentTarget.value = ''
-    setCsvText(null)
-    setCsvPreview(null)
-    setCsvMessage('')
-    setCsvError('')
-    setCsvSelectedFileName(file?.name ?? '')
+    if (commitPending.current) return
+    const token = beginSelection()
     if (!file) return
+    setFileSelection({ name: file.name })
+
+    if (file.size > MAX_IMPORT_FILE_SIZE) {
+      setCsvError(
+        text(
+          'Ce fichier dépasse la limite de 10 Mio. Aucune donnée n’a été modifiée.',
+          'This file exceeds the 10 MiB limit. No data was changed.',
+        ),
+      )
+      return
+    }
+
+    setIsReadingCsv(true)
     try {
       const contents = await file.text()
+      if (selectionToken.current !== token) return
       const format = file.name.toLowerCase().endsWith('.json') ? 'flo' : 'csv'
       const preview = format === 'flo' ? await store.previewFloExport(contents) : await store.previewPeriodCsv(contents)
-      setImportFormat(format)
-      setCsvText(contents)
-      setCsvPreview(preview)
+      if (selectionToken.current !== token) return
+      setFileSelection({ name: file.name, review: { contents, format, preview } })
     } catch {
+      if (selectionToken.current !== token) return
       setCsvError(
         text(
           'Fichier invalide. Vérifie le format et les dates avant de réessayer.',
           'Invalid file. Check its format and dates, then try again.',
         ),
       )
+    } finally {
+      if (selectionToken.current === token) setIsReadingCsv(false)
     }
   }
 
   async function confirmCsvImport() {
-    if (!csvText || !csvPreview || isCsvImporting) return
+    const review = fileSelection?.review
+    if (!review || review.preview.conflictingStartDates.length || commitPending.current) return
+    commitPending.current = true
     setIsCsvImporting(true)
     setCsvError('')
+    setCsvMessage('')
+    let didSave = false
     try {
-      const saved = importFormat === 'flo' ? await store.importFloExport(csvText) : await store.importPeriodCsv(csvText)
+      const saved =
+        review.format === 'flo'
+          ? await store.importFloExport(review.contents)
+          : await store.importPeriodCsv(review.contents)
+      didSave = true
+      setFileSelection(null)
       await onImported()
-      setCsvPreview(null)
-      setCsvText(null)
       setCsvMessage(
         text(
           `${saved.length} période(s) ajoutée(s) depuis ${importFormat === 'flo' ? 'Flo' : 'le CSV'}.`,
           `${saved.length} period(s) added from ${importFormat === 'flo' ? 'Flo' : 'CSV'}.`,
         ),
       )
-    } catch {
-      setCsvError(
-        text(
-          'L’import a échoué. Aucune nouvelle période n’a été enregistrée.',
-          'Import failed. No new periods were saved.',
-        ),
-      )
+    } catch (error) {
+      if (didSave) {
+        setCsvError(
+          text(
+            'L’import a été enregistré, mais l’affichage n’a pas pu être actualisé. Recharge l’application pour relire les données.',
+            'The import was saved, but the display could not refresh. Reload the app to see your data.',
+          ),
+        )
+      } else if (error instanceof DuplicatePeriodStartError) {
+        setCsvError(
+          text(
+            'Un début de ce fichier est déjà enregistré. Aucune période n’a été ajoutée.',
+            'A start date in this file is already recorded. No periods were added.',
+          ),
+        )
+      } else {
+        setCsvError(
+          text(
+            'L’import a échoué. Aucune nouvelle période n’a été enregistrée; tu peux réessayer.',
+            'Import failed. No new periods were saved; you can try again.',
+          ),
+        )
+      }
     } finally {
+      commitPending.current = false
       setIsCsvImporting(false)
+      requestAnimationFrame(() => {
+        if (document.activeElement === document.body) {
+          if (didSave) csvFileButtonRef.current?.focus()
+          else csvConfirmButtonRef.current?.focus()
+        }
+      })
     }
   }
 
@@ -134,57 +249,29 @@ export function BackupSettingsView({ store, onImported, onBackupExported, locale
     }
   }
 
-  async function readBackupFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0]
-    setPreview(null)
-    setBackupJson(null)
-    setSelectedFileName(file?.name ?? '')
-    setImportError(null)
-    setImportMessage('')
-    event.currentTarget.value = ''
-    if (!file) return
-
-    try {
-      const json = await file.text()
-      const parsed = parsePeriodBackup(json)
-      setBackupJson(json)
-      setPreview(parsed)
-    } catch {
-      setImportError(
-        text(
-          'Ce fichier ne correspond pas à une sauvegarde JSON v1 ou v2 valide. Choisis une autre sauvegarde.',
-          'This is not a valid JSON v1 or v2 backup. Choose another file.',
-        ),
-      )
-    }
-  }
-
   async function confirmImport() {
-    if (!backupJson || !preview) return
+    const review = backupSelection?.review
+    if (!review || commitPending.current) return
+    commitPending.current = true
     setImportError(null)
     setImportMessage('')
     setIsImporting(true)
     let didReplaceData = false
 
     try {
-      await store.importBackup(backupJson)
+      await store.importBackup(review.contents)
       didReplaceData = true
+      setBackupSelection(null)
       await onImported()
-      setPreview(null)
-      setBackupJson(null)
-      setSelectedFileName('')
+      const count = review.preview.periods.length
       setImportMessage(
         text(
-          `Sauvegarde importée. ${preview.periods.length} date${preview.periods.length === 1 ? '' : 's'} de début et les réglages ont remplacé les données précédentes.`,
-          `Backup imported. ${preview.periods.length} start date(s) and settings replaced the previous data.`,
+          `Sauvegarde importée. ${count} date${count === 1 ? '' : 's'} de début et les réglages ont remplacé les données précédentes.`,
+          `Backup imported. ${count} start date(s) and settings replaced the previous data.`,
         ),
       )
-      fileButtonRef.current?.focus()
     } catch {
       if (didReplaceData) {
-        setPreview(null)
-        setBackupJson(null)
-        setSelectedFileName('')
         setImportError(
           text(
             'La sauvegarde a remplacé les données, mais l’affichage n’a pas pu être actualisé. Recharge l’application pour les relire.',
@@ -200,15 +287,20 @@ export function BackupSettingsView({ store, onImported, onBackupExported, locale
         )
       }
     } finally {
+      commitPending.current = false
       setIsImporting(false)
+      requestAnimationFrame(() => {
+        if (document.activeElement === document.body) {
+          if (didReplaceData) fileButtonRef.current?.focus()
+          else backupConfirmButtonRef.current?.focus()
+        }
+      })
     }
   }
 
-  function cancelImport() {
-    setPreview(null)
-    setBackupJson(null)
-    setSelectedFileName('')
-    setImportError(null)
+  const cancelBackupSelection = useCallback(() => {
+    if (commitPending.current) return
+    beginSelection()
     setImportMessage(
       text(
         'Import annulé. Les données présentes sur cet appareil n’ont pas été modifiées.',
@@ -216,9 +308,33 @@ export function BackupSettingsView({ store, onImported, onBackupExported, locale
       ),
     )
     fileButtonRef.current?.focus()
-  }
+  }, [beginSelection, text])
 
-  const dateSummary = preview ? getBackupDateSummary(preview) : null
+  const cancelCsvSelection = useCallback(() => {
+    if (commitPending.current) return
+    beginSelection()
+    setCsvMessage(text('Import annulé. Aucune donnée n’a été modifiée.', 'Import cancelled. No data was changed.'))
+    csvFileButtonRef.current?.focus()
+  }, [beginSelection, text])
+
+  useEffect(() => {
+    const backupInput = fileInputRef.current
+    const csvInput = csvFileInputRef.current
+    backupInput?.addEventListener('cancel', cancelBackupSelection)
+    csvInput?.addEventListener('cancel', cancelCsvSelection)
+    return () => {
+      backupInput?.removeEventListener('cancel', cancelBackupSelection)
+      csvInput?.removeEventListener('cancel', cancelCsvSelection)
+    }
+  }, [cancelBackupSelection, cancelCsvSelection])
+
+  useEffect(
+    () => () => {
+      selectionToken.current += 1
+    },
+    [],
+  )
+  const dateSummary = getDateSummary(preview?.periods ?? csvPreview?.periods ?? [], locale)
 
   return (
     <section className="backup-settings" aria-labelledby="backup-settings-title">
@@ -281,6 +397,7 @@ export function BackupSettingsView({ store, onImported, onBackupExported, locale
             aria-label={text('Fichier de sauvegarde JSON', 'JSON backup file')}
             aria-invalid={importError ? 'true' : undefined}
             aria-describedby={importError ? 'backup-import-hint backup-import-error' : 'backup-import-hint'}
+            disabled={busy}
             onChange={readBackupFile}
           />
           <button
@@ -288,11 +405,17 @@ export function BackupSettingsView({ store, onImported, onBackupExported, locale
             ref={fileButtonRef}
             type="button"
             aria-describedby={importError ? 'backup-import-hint backup-import-error' : 'backup-import-hint'}
-            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+            onClick={() => {
+              beginSelection()
+              fileInputRef.current?.click()
+            }}
           >
             {text('Choisir un fichier JSON', 'Choose JSON file')}
           </button>
-          <span className="backup-file-name">{selectedFileName || text('Aucun fichier choisi', 'No file chosen')}</span>
+          <span className="backup-file-name">
+            {backupSelection?.name || text('Aucun fichier choisi', 'No file chosen')}
+          </span>
         </div>
         <p className="field-hint" id="backup-import-hint">
           {text(
@@ -300,6 +423,15 @@ export function BackupSettingsView({ store, onImported, onBackupExported, locale
             'The file is validated before any changes and replaces existing data. Legacy 1–5 ratings are converted to the current 1–3 scale.',
           )}
         </p>
+
+        {isReadingBackup && (
+          <div className="backup-reading">
+            <p role="status">{text('Lecture du fichier…', 'Reading file…')}</p>
+            <button className="secondary-button" type="button" onClick={cancelBackupSelection}>
+              {text('Annuler la lecture', 'Cancel reading')}
+            </button>
+          </div>
+        )}
 
         {importError && (
           <p id="backup-import-error" className="field-error" role="alert">
@@ -337,12 +469,18 @@ export function BackupSettingsView({ store, onImported, onBackupExported, locale
               )}
             </p>
             <div className="backup-confirmation-actions">
-              <button className="primary-button" type="button" disabled={isImporting} onClick={confirmImport}>
+              <button
+                className="primary-button"
+                ref={backupConfirmButtonRef}
+                type="button"
+                disabled={busy}
+                onClick={confirmImport}
+              >
                 {isImporting
                   ? text('Remplacement…', 'Replacing…')
                   : text('Remplacer les données actuelles', 'Replace current data')}
               </button>
-              <button className="secondary-button" type="button" disabled={isImporting} onClick={cancelImport}>
+              <button className="secondary-button" type="button" disabled={busy} onClick={cancelBackupSelection}>
                 {text('Annuler l’import', 'Cancel import')}
               </button>
             </div>
@@ -369,20 +507,35 @@ export function BackupSettingsView({ store, onImported, onBackupExported, locale
             accept=".csv,text/csv,.json,application/json"
             tabIndex={-1}
             aria-label={text('Fichier Flo JSON ou CSV', 'Flo JSON or CSV file')}
+            disabled={busy}
             onChange={readCsvFile}
           />
           <button
             className="secondary-button backup-file-button"
             ref={csvFileButtonRef}
             type="button"
-            onClick={() => csvFileInputRef.current?.click()}
+            disabled={busy}
+            onClick={() => {
+              beginSelection()
+              csvFileInputRef.current?.click()
+            }}
           >
             {text('Choisir un fichier Flo JSON ou CSV', 'Choose a Flo JSON or CSV file')}
           </button>
           <span className="backup-file-name">
-            {csvSelectedFileName || text('Aucun fichier choisi', 'No file chosen')}
+            {fileSelection?.name || text('Aucun fichier choisi', 'No file chosen')}
           </span>
         </div>
+
+        {isReadingCsv && (
+          <div className="backup-reading">
+            <p role="status">{text('Lecture du fichier…', 'Reading file…')}</p>
+            <button className="secondary-button" type="button" onClick={cancelCsvSelection}>
+              {text('Annuler la lecture', 'Cancel reading')}
+            </button>
+          </div>
+        )}
+
         {csvError && (
           <p className="field-error" role="alert">
             {csvError}
@@ -394,31 +547,40 @@ export function BackupSettingsView({ store, onImported, onBackupExported, locale
               {csvPreview.periods.length} {text('période(s) à ajouter depuis', 'period(s) to add from')}{' '}
               {importFormat === 'flo' ? 'Flo' : 'CSV'}.
             </p>
+            {dateSummary && (
+              <p>
+                {text('Dates couvertes :', 'Dates covered:')} {dateSummary}
+              </p>
+            )}
             {csvPreview.conflictingStartDates.length > 0 ? (
               <p role="alert">
-                {text('Débuts déjà présents :', 'Existing start dates:')} {csvPreview.conflictingStartDates.join(', ')}.{' '}
+                {text('Débuts déjà présents :', 'Existing start dates:')}{' '}
+                {csvPreview.conflictingStartDates.slice(0, 5).join(', ')}
+                {csvPreview.conflictingStartDates.length > 5
+                  ? text(
+                      ` et ${csvPreview.conflictingStartDates.length - 5} autres.`,
+                      ` and ${csvPreview.conflictingStartDates.length - 5} more.`,
+                    )
+                  : '.'}{' '}
                 {text(
                   'Aucun import possible tant que ces conflits subsistent.',
                   'Resolve these conflicts before importing.',
                 )}
               </p>
             ) : (
-              <button className="primary-button" type="button" disabled={isCsvImporting} onClick={confirmCsvImport}>
+              <button
+                className="primary-button"
+                ref={csvConfirmButtonRef}
+                type="button"
+                disabled={busy}
+                onClick={confirmCsvImport}
+              >
                 {isCsvImporting
                   ? text('Import en cours…', 'Importing…')
                   : text('Confirmer l’ajout', 'Confirm addition')}
               </button>
             )}
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => {
-                setCsvPreview(null)
-                setCsvText(null)
-                setCsvSelectedFileName('')
-                csvFileButtonRef.current?.focus()
-              }}
-            >
+            <button className="secondary-button" type="button" disabled={busy} onClick={cancelCsvSelection}>
               {text('Annuler', 'Cancel')}
             </button>
           </div>

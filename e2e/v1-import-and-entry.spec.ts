@@ -59,9 +59,9 @@ test('enregistre une période complète et la complète depuis la fenêtre de sa
     page.getByRole('button', { name: 'Modifier la période du 12 mars 2025 (débutée le 12 mars 2025)' }),
   ).toBeVisible()
 
-  await page.getByRole('button', { name: 'Ajouter un événement' }).click()
+  await page.getByRole('button', { name: 'Modifier la période du 12 mars 2025 (débutée le 12 mars 2025)' }).click()
   const editing = page.getByRole('dialog')
-  await editing.getByLabel('Début des règles').fill('2025-03-12')
+  await expect(editing.getByLabel('Début des règles')).toHaveValue('2025-03-12')
   await expect(editing.getByRole('heading', { name: 'Compléter une période' })).toBeVisible()
   await expect(editing.getByLabel('Durée (jours)')).toHaveValue('4')
   await showDailyDetails(editing)
@@ -110,10 +110,11 @@ test('enregistre aujourd’hui avec le parcours adapté à la largeur et exporte
     await page.mouse.click(x, y)
   }
   await expect(dialog).toBeHidden()
-  await expect(page.locator('.has-period-day')).toHaveCount(5)
+  await expect(page.locator('.has-period-day')).toHaveCount(1)
+  await expect(page.locator('time[datetime="2025-03-24"]')).not.toHaveAccessibleName(/observation/i)
 
   if ((page.viewportSize()?.width ?? 0) <= 480) {
-    await add.click()
+    await page.getByRole('button', { name: 'Modifier la période du 20 mars 2025 (débutée le 20 mars 2025)' }).click()
     const editing = page.getByRole('dialog')
     await editing.getByRole('button', { name: 'Suivant' }).click()
     await editing.getByLabel('Jour de la période').selectOption('5')

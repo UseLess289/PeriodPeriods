@@ -1,16 +1,18 @@
-# 03 — Montrer des projections conditionnelles sur un an
+# 03 — Projections conditionnelles sur un an (reportées)
 
-**Statut :** spécification en cours. **Bloqué par :** 01, 02. **Débloque :** 05.
+**Statut :** reportées hors v1 (décision du ticket 16). Elles ne sont pas accessibles depuis les vues v1 et ne bloquent pas Statistiques.
 
-**Résultat attendu :** consulter plusieurs débuts possibles sur l'année à venir en comprenant que chaque occurrence suppose que les estimations précédentes se réalisent. Il ne s'agit pas d'événements enregistrés.
+En v1, Accueil montre uniquement la prochaine date de début estimée et les repères approximatifs du calendrier lorsqu’ils sont cohérents. Statistiques décrit l’historique; elle ne présente pas de projections annuelles. `projectYear` est un calcul interne, pas une fonctionnalité livrée.
 
-## Comportement à préciser
+## Piste pour une version ultérieure
+
+Consulter plusieurs débuts possibles sur l'année à venir en comprenant que chaque occurrence suppose que les estimations précédentes se réalisent. Il ne s'agit pas d'événements enregistrés.
 
 - Partir de l'horizon arrêté au ticket 01 et produire toutes les occurrences qui y tombent. Conserver séparément les observations et les projections ; ne jamais enregistrer les dates calculées comme des périodes.
 - Afficher l'hypothèse conditionnelle près de la série et dans son explication accessible. Définir comment la plage évolue à chaque occurrence selon la méthode validée au ticket 02 ; ne pas recopier une marge fixe sans justification.
 - Prévoir l'état sans assez de données, les estimations centrales déjà passées, les changements d'historique et la dernière occurrence qui dépasse l'horizon.
 
-## Critères d'acceptation
+## Critères à reprendre après v1
 
 - La série est recalculée après l'ajout ou l'import de données et n'altère pas l'historique stocké.
 - Chaque occurrence possède une date, une qualification d'estimation et l'incertitude que la méthode permet réellement de produire.

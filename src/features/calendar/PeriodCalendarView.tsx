@@ -5,7 +5,7 @@ import { addCivilDays, buildCalendarMonth, shiftCalendarMonth } from '../../doma
 import { cyclePhaseNames, estimateCyclePhaseRanges } from '../../domain/forecast/estimate-cycle-phases'
 import type { CivilDateRange, CyclePhaseName, CyclePhaseRanges } from '../../domain/forecast/estimate-cycle-phases'
 import type { PeriodStartEstimate } from '../../domain/forecast/estimate-next-period'
-import { daysBetweenCivilDates, getPeriodDuration } from '../../domain/periods'
+import { daysBetweenCivilDates, getPeriodDuration, hasDailyObservation } from '../../domain/periods'
 import type { CivilDate, Period } from '../../domain/periods'
 import { formatCivilDate, formatCivilMonth, getCalendarWeekdays, type Locale } from '../shared/format-civil-date'
 
@@ -53,7 +53,7 @@ type PeriodCalendarViewProps = {
   firstDayOfWeek: 0 | 1
   today: CivilDate
   onSaveDates: (dates: CivilDate[]) => Promise<string | null>
-  onEditPeriod: (startDate: CivilDate) => void
+  onEditPeriod: (period: Period) => void
 }
 
 type MonthSwipeGesture = {
@@ -111,7 +111,9 @@ export function PeriodCalendarView({
   locale = 'fr',
 }: PeriodCalendarViewProps) {
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
-  const [monthStart, setMonthStart] = useState<CivilDate>(`${today.slice(0, 7)}-01`)
+  const currentMonth = `${today.slice(0, 7)}-01`
+  const [browsedMonth, setBrowsedMonth] = useState<CivilDate | null>(null)
+  const monthStart = browsedMonth ?? currentMonth
   const [monthDirection, setMonthDirection] = useState<-1 | 1>(1)
   const [hasChangedMonth, setHasChangedMonth] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
@@ -132,23 +134,49 @@ export function PeriodCalendarView({
   const formattedMonthTitle = `${monthTitle[0].toLocaleUpperCase(locale)}${monthTitle.slice(1)}`
   const calendarDays = buildCalendarMonth(monthStart, firstDayOfWeek)
   const recordedStarts = new Set(periods.map(({ startDate }) => startDate))
+  const visibleStarts = new Map(
+    periods
+      .filter(({ startDate }) => startDate.startsWith(monthStart.slice(0, 7)))
+      .map((period) => [period.startDate, period] as const),
+  )
+  const tabStopDate =
+    focusedDate &&
+    focusedDate.startsWith(monthStart.slice(0, 7)) &&
+    focusedDate <= today &&
+    !recordedStarts.has(focusedDate)
+      ? focusedDate
+      : isAdding
+        ? getFirstSelectableDate(monthStart, firstDayOfWeek, recordedStarts, today)
+        : null
   const displayedDays = calendarDays.filter((day) => day.inDisplayedMonth)
   const firstDisplayed = displayedDays[0].date
   const lastDisplayed = displayedDays[displayedDays.length - 1].date
   const recordedSpans = periods
-    .filter((period) => period.startDate <= lastDisplayed)
+    .filter((period) => period.startDate <= today && period.startDate <= lastDisplayed)
     .map((period) => ({ period, start: period.startDate, duration: getPeriodDuration(period) }))
     .filter(({ start, duration }) => start >= firstDisplayed || daysBetweenCivilDates(start, firstDisplayed) < duration)
-  const monthPeriodStarts = new Set(
-    periods.filter((period) => period.startDate.startsWith(monthStart.slice(0, 7))).map((period) => period.startDate),
+    .sort((left, right) => right.start.localeCompare(left.start))
+  const dayRecords = new Map(
+    displayedDays.flatMap(({ date }) => {
+      const span = recordedSpans.find(
+        ({ start, duration }) => date >= start && daysBetweenCivilDates(start, date) < duration,
+      )
+      if (!span) return []
+      const dayIndex = daysBetweenCivilDates(span.start, date) + 1
+      const observed =
+        date <= today &&
+        (span.period.dailyLogs?.some((entry) => entry.day === dayIndex && hasDailyObservation(entry)) ?? false)
+      return [[date, { period: span.period, observed }] as const]
+    }),
   )
   const phaseRanges = estimate.kind === 'insufficient' ? null : estimateCyclePhaseRanges(periods, estimate, today)
+  const availablePhases = cyclePhaseNames.filter(
+    (phase) => phaseRanges?.[phase].expected || phaseRanges?.[phase].possible,
+  )
   const expectedPhaseForCalendarDate = (date: CivilDate, inDisplayedMonth: boolean): CyclePhaseName | null => {
     if (!phaseRanges || !inDisplayedMonth) return null
-    const isRecorded = recordedSpans.some(
-      ({ start, duration }) => date >= start && daysBetweenCivilDates(start, date) < duration,
-    )
-    return isRecorded ? 'menstrual' : expectedPhaseAtDate(phaseRanges, date)
+    if (dayRecords.has(date) || (visibleStarts.has(date) && date <= today)) return null
+    return expectedPhaseAtDate(phaseRanges, date)
   }
   const orderedSelection = [...selectedDates].sort()
   const weekDays = getCalendarWeekdays(firstDayOfWeek, locale)
@@ -160,6 +188,11 @@ export function PeriodCalendarView({
   }
   const todayLabel = text('Aujourd’hui', 'Today')
   const recordedLabel = text('Début enregistré', 'Recorded period start')
+  const observedLabel = text('Observation quotidienne saisie', 'Daily observation logged')
+  const durationGuideLabel = text(
+    'Jour de la durée indicative, sans observation',
+    'Duration guide day, no observation logged',
+  )
   const centerLabel = text('Date centrale estimée', 'Central estimate')
   const addLabel = text('Ajouter plusieurs débuts', 'Add multiple period starts')
   const editPeriodHint = text(
@@ -208,7 +241,7 @@ export function PeriodCalendarView({
     if (nextMonth === monthStart) return
     setHasChangedMonth(true)
     setMonthDirection(nextMonth > monthStart ? 1 : -1)
-    setMonthStart(nextMonth)
+    setBrowsedMonth(nextMonth === currentMonth ? null : nextMonth)
     if (isAdding) setFocusedDate(getFirstSelectableDate(nextMonth, firstDayOfWeek, recordedStarts, today))
   }
 
@@ -218,7 +251,8 @@ export function PeriodCalendarView({
   }
 
   function goToToday() {
-    showMonth(`${today.slice(0, 7)}-01`)
+    showMonth(currentMonth)
+    setBrowsedMonth(null)
   }
 
   function handleMonthPointerDown(event: ReactPointerEvent<HTMLTableElement>) {
@@ -451,7 +485,7 @@ export function PeriodCalendarView({
           <button
             className="secondary-button today-button"
             type="button"
-            disabled={monthStart === `${today.slice(0, 7)}-01`}
+            disabled={monthStart === currentMonth}
             onClick={goToToday}
           >
             {todayLabel}
@@ -473,12 +507,15 @@ export function PeriodCalendarView({
         </button>
       </div>
 
-      {phaseRanges && (
-        <ul className="calendar-legend phase-calendar-legend" aria-label={text('Phases du cycle', 'Cycle phases')}>
-          {cyclePhaseNames.map((phase) => (
+      {availablePhases.length > 0 && (
+        <ul
+          className="calendar-legend phase-calendar-legend"
+          aria-label={text('Phases estimées du cycle', 'Estimated cycle phases')}
+        >
+          {availablePhases.map((phase) => (
             <li key={phase}>
               <span className={`phase-legend-swatch phase-legend-${phase}`} aria-hidden="true" />
-              {phaseLabels[phase][locale]}
+              {estimatedPhaseDescriptions[phase][locale]}
             </li>
           ))}
           <li>
@@ -519,22 +556,22 @@ export function PeriodCalendarView({
               <tr key={calendarDays[weekIndex * 7].date}>
                 {calendarDays.slice(weekIndex * 7, weekIndex * 7 + 7).map((day, weekdayIndex) => {
                   const dayNumber = Number(day.date.slice(-2))
-                  const hasPeriodStart = monthPeriodStarts.has(day.date)
+                  const start = visibleStarts.get(day.date)
+                  const hasPeriodStart = Boolean(start)
                   const isFutureStart = hasPeriodStart && day.date > today
                   const isFuture = day.date > today
                   const isSelected = selectedDates.has(day.date)
-                  const isForecastCenter = estimate.kind !== 'insufficient' && day.date === estimate.predictedStartDate
-                  const isRecordedDay = recordedSpans.some(
-                    ({ start, duration }) => day.date >= start && daysBetweenCivilDates(start, day.date) < duration,
-                  )
-                  const editablePeriod = recordedSpans
-                    .filter(
-                      ({ start, duration }) =>
-                        start <= today && day.date >= start && daysBetweenCivilDates(start, day.date) < duration,
-                    )
-                    .sort((left, right) => right.start.localeCompare(left.start))[0]?.period
+                  const record = dayRecords.get(day.date)
+                  const editablePeriod = start ?? record?.period
+                  const hasObservation = record?.observed ?? false
+                  const isDurationGuide = Boolean(editablePeriod) && !hasPeriodStart && !hasObservation
+                  // Past records take precedence over projections. A future recorded
+                  // start can coincide with the independent forecast, so show both.
+                  const suppressForecast = Boolean(record) || (hasPeriodStart && day.date <= today)
+                  const isForecastCenter =
+                    !suppressForecast && estimate.kind !== 'insufficient' && day.date === estimate.predictedStartDate
                   const datePhases: Array<{ phase: CyclePhaseName; possible: boolean }> = []
-                  if (day.inDisplayedMonth && !isRecordedDay && phaseRanges) {
+                  if (day.inDisplayedMonth && !suppressForecast && phaseRanges) {
                     for (const phase of cyclePhaseNames) {
                       const ranges = phaseRanges[phase]
                       if (dateIsInRange(ranges.expected, day.date)) datePhases.push({ phase, possible: false })
@@ -566,13 +603,15 @@ export function PeriodCalendarView({
                           : undefined
                     : undefined
                   const isForecastDay =
-                    !isRecordedDay && dateIsInRange(phaseRanges?.menstrual.expected ?? null, day.date)
+                    !suppressForecast && dateIsInRange(phaseRanges?.menstrual.expected ?? null, day.date)
                   const isForecastRange =
+                    !suppressForecast &&
                     estimate.kind === 'range' &&
+                    estimate.earliestStartDate !== estimate.latestStartDate &&
                     day.date >= estimate.earliestStartDate &&
                     day.date <= estimate.latestStartDate
-                  const isForecastLowerBound = estimate.kind === 'range' && day.date === estimate.earliestStartDate
-                  const isForecastUpperBound = estimate.kind === 'range' && day.date === estimate.latestStartDate
+                  const isForecastLowerBound = isForecastRange && day.date === estimate.earliestStartDate
+                  const isForecastUpperBound = isForecastRange && day.date === estimate.latestStartDate
                   const dateDescriptions = [
                     ...(hasPeriodStart
                       ? [
@@ -588,7 +627,8 @@ export function PeriodCalendarView({
                       ? [text('Borne haute de la plage estimée', 'Latest date in the estimated range')]
                       : []),
                     ...(isForecastCenter ? [centerLabel] : []),
-                    ...(isRecordedDay && !hasPeriodStart ? [text('Jour de règles', 'Period day')] : []),
+                    ...(hasObservation ? [observedLabel] : []),
+                    ...(isDurationGuide ? [durationGuideLabel] : []),
                     ...(isForecastDay && !isForecastCenter && !isForecastLowerBound && !isForecastUpperBound
                       ? [text('Jour de règles estimé', 'Estimated period day')]
                       : []),
@@ -600,6 +640,7 @@ export function PeriodCalendarView({
                       : []),
                   ]
                   const phaseDescriptionId = datePhases.length > 0 ? `phase-description-${day.date}` : undefined
+                  const recordDescriptionId = editablePeriod ? `record-description-${day.date}` : undefined
                   const calendarDayContents = (
                     <>
                       <span className="calendar-day-number">{dayNumber}</span>
@@ -636,7 +677,8 @@ export function PeriodCalendarView({
                       className={[
                         day.inDisplayedMonth ? '' : 'is-outside-month',
                         day.date === today ? 'is-today' : '',
-                        day.inDisplayedMonth && isRecordedDay ? 'has-period-day' : '',
+                        day.inDisplayedMonth && !isFuture && (hasPeriodStart || hasObservation) ? 'has-period-day' : '',
+                        day.inDisplayedMonth && isDurationGuide ? 'has-duration-guide' : '',
                         day.inDisplayedMonth && isForecastDay ? 'has-estimated-period-day' : '',
                         isFutureStart ? 'is-future-start' : '',
                         isForecastRange ? 'is-estimated-range' : '',
@@ -666,8 +708,9 @@ export function PeriodCalendarView({
                             aria-label={`${dateLabel}${isSelected ? text(', sélectionnée', ', selected') : ''}${unavailableReason ? `, ${unavailableReason}` : ''}`}
                             aria-pressed={isSelected}
                             disabled={Boolean(unavailableReason)}
-                            tabIndex={focusedDate === day.date ? 0 : -1}
-                            aria-describedby={phaseDescriptionId}
+                            tabIndex={tabStopDate === day.date ? 0 : -1}
+                            aria-current={day.date === today ? 'date' : undefined}
+                            aria-describedby={recordDescriptionId ?? phaseDescriptionId}
                             onClick={() => toggleDate(day.date)}
                             onKeyDown={(event) => handleSelectionKeyDown(event, day.date)}
                           >
@@ -684,10 +727,19 @@ export function PeriodCalendarView({
                               `Modifier la période du ${dateLabel} (débutée le ${formatCivilDate(editablePeriod.startDate, locale)})`,
                               `Edit period day ${dateLabel}, starting ${formatCivilDate(editablePeriod.startDate, locale)}`,
                             )}
-                            aria-describedby="calendar-edit-period-hint"
-                            onClick={() => onEditPeriod(editablePeriod.startDate)}
+                            aria-describedby={`${recordDescriptionId} calendar-edit-period-hint`}
+                            onClick={(event) => {
+                              event.currentTarget.focus({ preventScroll: true })
+                              onEditPeriod(editablePeriod)
+                            }}
                           >
-                            <time dateTime={day.date} aria-current={day.date === today ? 'date' : undefined}>
+                            <time
+                              dateTime={day.date}
+                              aria-current={day.date === today ? 'date' : undefined}
+                              aria-label={
+                                isFutureStart ? `${dateDescriptions[0]} ${text('le', 'on')} ${dateLabel}` : undefined
+                              }
+                            >
                               {calendarDayContents}
                             </time>
                           </button>
@@ -712,6 +764,11 @@ export function PeriodCalendarView({
                           {datePhases
                             .map(({ phase, possible }) => phaseDescription(phase, possible, locale))
                             .join('; ')}
+                        </span>
+                      )}
+                      {day.inDisplayedMonth && recordDescriptionId && (
+                        <span id={recordDescriptionId} className="visually-hidden">
+                          {dateDescriptions.join('. ')}
                         </span>
                       )}
                     </td>
@@ -741,9 +798,13 @@ export function PeriodCalendarView({
         )}
         <li>
           <span className="period-start-mark" aria-hidden="true" />
-          {text('Règles enregistrées', 'Recorded period')}
+          {text('Début ou observation saisis', 'Logged start or observation')}
         </li>
-        {estimate.kind === 'range' && (
+        <li>
+          <span className="duration-guide-mark" aria-hidden="true" />
+          {text('Durée indicative (5 jours par défaut)', 'Duration guide (5 days by default)')}
+        </li>
+        {estimate.kind === 'range' && estimate.earliestStartDate !== estimate.latestStartDate && (
           <>
             <li>
               <span className="forecast-range-mark" aria-hidden="true" />
@@ -761,15 +822,15 @@ export function PeriodCalendarView({
             {text('Règles estimées', 'Estimated period')}
           </li>
         )}
-        {phaseRanges && (
+        {phaseRanges?.ovulatory.expected && (
           <li>
             <span className="ovulation-peak-mark" aria-hidden="true" />
-            {text('Pic d’ovulation estimé (Peak ovulation)', 'Peak ovulation')}
+            {text('Pic d’ovulation estimé', 'Estimated ovulation peak')}
           </li>
         )}
       </ul>
 
-      {monthPeriodStarts.size === 0 && !isAdding && (
+      {visibleStarts.size === 0 && !isAdding && (
         <div className="calendar-empty-note">
           <p>{text('Aucune date de début enregistrée pour ce mois.', 'No period starts recorded for this month.')}</p>
         </div>

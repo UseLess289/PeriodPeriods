@@ -103,8 +103,8 @@ function EstimateMethodDetails({ locale }: { readonly locale: Locale }) {
         </p>
         <p>
           {text(
-            'Les phases colorées du calendrier sont des repères approximatifs. L’ovulation centrale est placée 14 jours avant le prochain début estimé; les teintes pâles montrent des dates possibles en tenant compte de la plage des cycles et d’une phase lutéale de 10 à 16 jours. La durée des prochaines règles utilise la médiane des six durées les plus récentes (ou de toutes les durées disponibles si elles sont moins nombreuses). Ces repères ne confirment pas l’ovulation et ne servent pas de contraception.',
-            'The colored calendar phases are approximate guides. Central ovulation is placed 14 days before the estimated next period; pale tints show possible dates based on the cycle range and a 10–16 day luteal phase. The upcoming period duration uses the median of the six most recent recorded durations, or all available durations if fewer than six exist. These dates do not confirm ovulation and are not for contraception.',
+            'Les phases colorées du calendrier sont des repères approximatifs. Le repère central d’ovulation est placé 14 jours avant le prochain début estimé; les pointillés indiquent d’autres dates possibles. Les repères incompatibles avec les dates ou durées de ton historique sont masqués. La durée des prochaines règles utilise la médiane des durées récentes, y compris les durées par défaut. Ces repères ne permettent pas de déterminer l’ovulation ou la fertilité et ne servent pas de contraception.',
+            'The colored calendar phases are approximate guides. The central ovulation marker is placed 14 days before the estimated next start; dotted marks indicate other possible dates. Markers that conflict with dates or durations in your history are hidden. The estimated period length uses the median of recent durations, including defaults. These guides cannot determine ovulation or fertility and are not for contraception.',
           )}
         </p>
       </div>
@@ -127,18 +127,29 @@ function ForecastView({
         <time className="forecast-date" dateTime={estimate.predictedStartDate}>
           {formatCivilMonthDay(estimate.predictedStartDate, locale)}
         </time>
-        <span className="forecast-uncertainty">
-          <span aria-hidden="true">
-            ± {estimate.uncertaintyDays} {text('j', estimate.uncertaintyDays === 1 ? 'day' : 'days')}
+        {estimate.uncertaintyDays > 0 && (
+          <span className="forecast-uncertainty">
+            <span aria-hidden="true">
+              ± {estimate.uncertaintyDays} {text('j', estimate.uncertaintyDays === 1 ? 'day' : 'days')}
+            </span>
+            <span className="visually-hidden">
+              {text(
+                `plus ou moins ${estimate.uncertaintyDays} jours selon les intervalles observés`,
+                `plus or minus ${estimate.uncertaintyDays} ${estimate.uncertaintyDays === 1 ? 'day' : 'days'} based on observed intervals`,
+              )}
+            </span>
           </span>
-          <span className="visually-hidden">
-            {text(
-              `plus ou moins ${estimate.uncertaintyDays} jours`,
-              `plus or minus ${estimate.uncertaintyDays} ${estimate.uncertaintyDays === 1 ? 'day' : 'days'}`,
-            )}
-          </span>
-        </span>
+        )}
       </p>
+      {estimate.isPast && <p className="field-hint">{text('Estimation passée', 'Past estimate')}</p>}
+      {estimate.uncertaintyDays === 0 && (
+        <p className="field-hint">
+          {text(
+            'Aucune variation observée dans ces intervalles; la date reste incertaine.',
+            'No variation in these observed intervals; the date is still uncertain.',
+          )}
+        </p>
+      )}
     </section>
   )
 }

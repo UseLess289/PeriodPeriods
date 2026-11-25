@@ -34,6 +34,7 @@ const defaultStore = createPeriodDataStore()
 function getViewFromLocation(): View {
   if (typeof window === 'undefined') return 'home'
   const view = new URLSearchParams(window.location.search).get('view')
+  if (view === 'calendar') return 'stats'
   return view === 'stats' || view === 'settings' ? view : 'home'
 }
 
@@ -106,7 +107,9 @@ function getLocalCivilDate(date = new Date()): CivilDate {
   return `${year}-${month}-${day}`
 }
 
-function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
+function App({ store = defaultStore, today: fixedToday }: AppProps) {
+  const [localToday, setLocalToday] = useState(getLocalCivilDate)
+  const today = fixedToday ?? localToday
   const [activeView, setActiveView] = useState<View>(getViewFromLocation)
   const [themePreference, setThemePreference] = useState<ThemePreference>(getStoredThemePreference)
   const [systemTheme, setSystemTheme] = useState<Theme>(getSystemTheme)
@@ -120,11 +123,38 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const saveMessageTimeout = useRef<number | null>(null)
-  const [eventDialogOpen, setEventDialogOpen] = useState(false)
-  const [eventStartDate, setEventStartDate] = useState<CivilDate | null>(null)
+  const [event, setEvent] = useState<{ startDate: CivilDate; periodId?: string } | null>(null)
+  const addButton = useRef<HTMLButtonElement>(null)
   const [hasNavigated, setHasNavigated] = useState(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const previousViewRef = useRef(activeView)
+
+  useEffect(() => {
+    if (fixedToday !== undefined) return
+
+    let timer: number
+    function refreshDate() {
+      window.clearTimeout(timer)
+      const now = new Date()
+      setLocalToday(getLocalCivilDate(now))
+      const midnight = new Date(now)
+      midnight.setHours(24, 0, 0, 0)
+      timer = window.setTimeout(refreshDate, midnight.getTime() - now.getTime())
+    }
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') refreshDate()
+    }
+    refreshDate()
+    window.addEventListener('focus', refreshDate)
+    window.addEventListener('pageshow', refreshDate)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('focus', refreshDate)
+      window.removeEventListener('pageshow', refreshDate)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [fixedToday])
 
   useEffect(
     () => () => {
@@ -225,6 +255,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
     const handlePopState = () => {
       setHasNavigated(true)
       setActiveView(getViewFromLocation())
+      setEvent(null)
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
@@ -240,6 +271,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
       window.history.pushState({ view }, '', `${url.pathname}${url.search}${url.hash}`)
       setHasNavigated(true)
       setActiveView(view)
+      setEvent(null)
     },
     [activeView],
   )
@@ -249,27 +281,36 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
       return 'Une date future ne peut pas être enregistrée.'
     }
     try {
-      const existing = periods?.find((item) => item.startDate === input.startDate)
-      if (existing) {
-        const updated = await store.updatePeriod(existing.id, {
-          durationDays: input.durationDays,
-          dailyLogs: input.dailyLogs,
-          symptoms: input.symptoms,
-        })
-        setPeriods((current) => current?.map((item) => (item.id === updated.id ? updated : item)) ?? [])
-      } else {
-        const saved = await store.addPeriod(input)
-        setPeriods((current) =>
-          [...(current ?? []), saved].sort((left, right) => left.startDate.localeCompare(right.startDate)),
-        )
-      }
+      const saved = event?.periodId ? await store.updatePeriod(event.periodId, input) : await store.addPeriod(input)
+      setPeriods((current) =>
+        [...(current ?? []).filter(({ id }) => id !== saved.id), saved].sort((left, right) =>
+          left.startDate.localeCompare(right.startDate),
+        ),
+      )
       updateSaveMessage(
         locale === 'en' ? 'Period saved on this device.' : 'Période enregistrée sur cet appareil.',
         1000,
       )
       return null
-    } catch {
+    } catch (error) {
+      if (error instanceof DuplicatePeriodStartError) return 'Un début est déjà enregistré pour cette date.'
       return 'L’enregistrement a échoué. Vérifie les données et réessaie.'
+    }
+  }
+
+  async function removeEvent(id: string): Promise<string | null> {
+    try {
+      await store.deletePeriod(id)
+      setPeriods((current) => current?.filter((period) => period.id !== id) ?? [])
+      updateSaveMessage(
+        locale === 'en' ? 'Period deleted from this device.' : 'Période supprimée de cet appareil.',
+        3000,
+      )
+      return null
+    } catch {
+      return locale === 'en'
+        ? 'Could not delete this period. Try again.'
+        : 'Impossible de supprimer cette période. Réessaie.'
     }
   }
 
@@ -412,10 +453,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
                   firstDayOfWeek={settings.firstDayOfWeek}
                   today={today}
                   onSaveDates={savePeriodStarts}
-                  onEditPeriod={(startDate) => {
-                    setEventStartDate(startDate)
-                    setEventDialogOpen(true)
-                  }}
+                  onEditPeriod={({ id, startDate }) => setEvent({ startDate, periodId: id })}
                   locale={locale}
                 />
               }
@@ -549,25 +587,29 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
           <button
             className="floating-add"
             type="button"
+            ref={addButton}
             aria-label={locale === 'en' ? 'Add an event' : 'Ajouter un événement'}
-            onClick={() => {
-              setEventStartDate(today)
-              setEventDialogOpen(true)
+            onClick={(click) => {
+              click.currentTarget.focus({ preventScroll: true })
+              setEvent({ startDate: today })
             }}
           >
             <Plus size={24} aria-hidden="true" />
             <span>{locale === 'en' ? 'Add' : 'Ajouter'}</span>
           </button>
           <PeriodEventDialog
-            open={eventDialogOpen}
-            periods={periods}
+            open={event !== null}
+            period={periods.find(({ id }) => id === event?.periodId)}
             today={today}
-            initialStartDate={eventStartDate ?? today}
+            initialStartDate={event?.startDate ?? today}
             onClose={() => {
-              setEventDialogOpen(false)
-              setEventStartDate(null)
+              setEvent(null)
+              requestAnimationFrame(() => {
+                if (document.activeElement === document.body) addButton.current?.focus({ preventScroll: true })
+              })
             }}
             onSave={saveEvent}
+            onDelete={removeEvent}
             locale={locale}
           />
         </>

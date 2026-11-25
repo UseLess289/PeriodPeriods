@@ -135,7 +135,8 @@ describe('PeriodPeriods app', () => {
 
     expect(await screen.findByRole('heading', { name: 'Prochain début estimé' })).toBeInTheDocument()
     expect(screen.getByText('23 avril')).toHaveAttribute('datetime', '2025-04-23')
-    expect(screen.getByText('± 0 j')).toBeInTheDocument()
+    expect(screen.getByText(/aucune variation observée.*la date reste incertaine/i)).toBeInTheDocument()
+    expect(screen.queryByText('± 0 j')).not.toBeInTheDocument()
     expect(screen.queryByText(/ni une certitude|méthode contraceptive/i)).not.toBeInTheDocument()
 
     await user.click(screen.getByText('Comprendre l’estimation'))
@@ -252,7 +253,8 @@ describe('PeriodPeriods app', () => {
     render(<App store={store} today="2025-04-25" />)
 
     expect(await screen.findByText('23 avril')).toHaveAttribute('datetime', '2025-04-23')
-    expect(screen.getByText('± 0 j')).toBeInTheDocument()
+    expect(screen.getByText('Estimation passée')).toBeInTheDocument()
+    expect(screen.getByText(/la date reste incertaine/i)).toBeInTheDocument()
   })
 
   it('changes destination with the keyboard and moves focus to its heading', async () => {

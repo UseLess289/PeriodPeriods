@@ -59,7 +59,7 @@ describe('calendar phase ranges', () => {
     })
     expect(phases?.ovulatory).toEqual({
       expected: { startDate: '2025-07-03', endDate: '2025-07-03' },
-      possible: { startDate: '2025-06-30', endDate: '2025-07-08' },
+      possible: { startDate: '2025-07-02', endDate: '2025-07-08' },
     })
   })
 
@@ -90,5 +90,30 @@ describe('calendar phase ranges', () => {
     }
 
     expect(estimateCyclePhaseRanges(periods, estimate, '2025-03-26')).toBeNull()
+  })
+
+  it('suppresses phases that would precede or overlap the latest period', () => {
+    const periods = recordedPeriods(['2025-01-01', '2025-01-07', '2025-01-13', '2025-01-19'])
+    const estimate = estimateNextPeriod(periods, '2025-01-19')
+    if (estimate.kind === 'insufficient') throw new Error('Expected a cycle estimate')
+    const phases = estimateCyclePhaseRanges(periods, estimate, '2025-01-19')
+    expect(phases?.menstrual.expected?.startDate).toBe('2025-01-25')
+    for (const phase of ['follicular', 'ovulatory', 'luteal'] as const) {
+      expect(phases?.[phase]).toEqual({ expected: null, possible: null })
+    }
+    periods[3].durationDays = Number.MAX_SAFE_INTEGER
+    expect(estimateCyclePhaseRanges(periods, estimate, '2025-01-19')).toBeNull()
+  })
+
+  it('omits an unrepresentable projected duration without throwing or changing the history', () => {
+    const periods = recordedPeriods(
+      ['2025-01-01', '2025-01-29', '2025-02-26', '2025-03-26'],
+      [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, 5],
+    )
+    const estimate = estimateNextPeriod(periods, '2025-03-26')
+    if (estimate.kind === 'insufficient') throw new Error('Expected a cycle estimate')
+    const phases = estimateCyclePhaseRanges(periods, estimate, '2025-03-26')
+    expect(phases?.menstrual).toEqual({ expected: null, possible: null })
+    expect(periods[0].durationDays).toBe(Number.MAX_SAFE_INTEGER)
   })
 })

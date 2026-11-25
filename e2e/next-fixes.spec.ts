@@ -33,11 +33,11 @@ test('shows blended phase colors and dotted possible-date markers in the calenda
     'dotted',
   )
 
-  const phaseLegend = page.getByRole('list', { name: 'Phases du cycle' })
+  const phaseLegend = page.getByRole('list', { name: 'Phases estimées du cycle' })
   await expect(phaseLegend.getByRole('listitem')).toHaveCount(5)
   await expect(phaseLegend).toContainText('Dates possibles')
   const calendarLegend = page.getByRole('list', { name: 'Légende du calendrier' })
-  await expect(calendarLegend).toContainText('Peak ovulation')
+  await expect(calendarLegend).toContainText('Pic d’ovulation estimé')
 })
 
 test('uses equal-width bottom navigation and shows Add only on Home', async ({ page }) => {

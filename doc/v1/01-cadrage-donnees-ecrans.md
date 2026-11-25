@@ -8,10 +8,10 @@
 
 - La fenêtre d'ajout permet de renseigner le début, la fin et les symptômes. Préciser si le flux et les notes, déjà prévus par le modèle `Period`, doivent aussi figurer dans cette fenêtre ; l'interface actuelle ne saisit que `startDate`.
 - Les graphiques représentent quatre **phases estimées** : menstruelle, folliculaire, ovulatoire et lutéale. Définir une méthode documentée, les données nécessaires et le degré de précision affiché ; ne pas assimiler une date de début à une observation de l'ovulation. Les limites des phases inférées doivent rester visibles.
-- Confirmer la structure : Accueil = estimation, explication, calendrier ; Statistiques = historique et graphiques ; Réglages = préférences et données. Définir le devenir de l'URL existante `?view=calendar`.
+- En v1 : Accueil = estimation, explication, calendrier et action Ajouter ; Statistiques = historique et graphiques ; Réglages = préférences et données. L’ancienne URL `?view=calendar` ouvre Statistiques; Ajouter reste sur Accueil.
 - Exposer en priorité le **premier jour de la semaine**, déjà présent dans `AppSettings`. Garder les thèmes clair et sombre existants et prévoir le choix de langue français/anglais ; préciser comment leurs préférences sont enregistrées, exportées et restaurées.
 - Direction visuelle choisie : lisibilité et repères proches d'Apple Calendrier, dans des tons roses pastel, en thèmes clair et sombre. Fixer les couleurs définitives des phases après avoir défini leur signification.
-- Définir le sens de « sur un an » : horizon à partir d'aujourd'hui ou du dernier début observé, affichage des cycles qui tombent dans l'intervalle, hypothèse de réalisation et présentation de l'incertitude.
+- Les projections conditionnelles sur un an sont reportées hors v1 (ticket 16).
 - L'import accepte un **export Flo original sans conversion manuelle**. Identifier les formats effectivement fournis par Flo et leurs variantes au moyen d'une documentation vérifiée et de fichiers d'exemple anonymisés ; fixer ensuite les règles d'ajout ou de remplacement, de dédoublonnage et de confirmation. La demande initiale d'import CSV reste à satisfaire, y compris si Flo fournit un autre format.
 
 ## Critères d'acceptation

@@ -30,6 +30,14 @@ export function pickDailyIntensities(entry: PeriodDay): Partial<Record<DailyInte
   return intensities
 }
 
+export function hasDailyObservation(entry: PeriodDay): boolean {
+  return (
+    entry.flow !== undefined ||
+    entry.headache !== undefined ||
+    DAILY_INTENSITIES.some((key) => entry[key] !== undefined)
+  )
+}
+
 export type NewPeriod = {
   startDate: CivilDate
   /** Legacy import field. Stored periods use durationDays instead. */

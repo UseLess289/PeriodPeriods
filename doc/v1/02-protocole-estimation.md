@@ -17,7 +17,7 @@ couverte par les plages disponibles. Elles décrivent les **saisies passées de
 cette personne**, sans garantir une précision future. Une date de début
 oubliée peut fausser aussi bien le modèle que son évaluation.
 
-Les projections d'un an sont conditionnelles : à chaque cycle, la durée
+Les projections d'un an sont reportées hors v1. Le calcul interne est conditionnel : à chaque cycle, la durée
 centrale est réutilisée et les bornes min–max des intervalles observés
 s'additionnent. Leur écart s'élargit avec l'horizon. Ce sont des scénarios,
 pas des intervalles de confiance calibrés ni une probabilité de grossesse.

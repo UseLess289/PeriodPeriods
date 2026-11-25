@@ -14,6 +14,7 @@
 
 - L'aperçu indique fichier, nombre de lignes utilisables, dates couvertes, erreurs compréhensibles et effet exact de la confirmation.
 - Un fichier invalide ou une annulation conserve intégralement les données existantes.
+- Les fichiers de plus de 10 Mio sont refusés avant la lecture, qu’il s’agisse d’une sauvegarde, d’un export Flo ou d’un CSV. Les durées valides ne sont pas tronquées.
 - La confirmation écrit les événements selon le contrat décidé et l'accueil, le calendrier et les statistiques reflètent les nouvelles données.
 
 **Fichiers concernés :** nouveau parseur dans `src/data/`, `src/data/period-data-store.ts`, `src/features/settings/BackupSettingsView.tsx`, `src/domain/periods/index.ts` selon les colonnes retenues.

@@ -1,6 +1,9 @@
 import type { CivilDate, Period } from '../../domain/periods'
 import { getCycleHistory } from '../../domain/history/get-cycle-history'
 import { formatCivilDate, type Locale } from '../shared/format-civil-date'
+import { PageControls } from '../shared/PageControls'
+
+const pageSize = 48
 
 type CycleHistoryViewProps = {
   readonly locale?: Locale
@@ -11,12 +14,19 @@ type CycleHistoryViewProps = {
 export function CycleHistoryView({ periods, today, locale = 'fr' }: CycleHistoryViewProps) {
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
   const history = getCycleHistory(periods, today)
+  const [intervalPage, setIntervalPage] = useState(0)
+  const [futurePage, setFuturePage] = useState(0)
   const futureStarts = periods
     .filter((period) => period.startDate > today)
     .sort((left, right) => {
       return left.startDate.localeCompare(right.startDate)
     })
   const pastStartCount = periods.filter((period) => period.startDate <= today).length
+  const intervalPageCount = Math.ceil(history.intervals.length / pageSize)
+  const futurePageCount = Math.ceil(futureStarts.length / pageSize)
+  const currentIntervalPage = Math.min(intervalPage, Math.max(0, intervalPageCount - 1))
+  const currentFuturePage = Math.min(futurePage, Math.max(0, futurePageCount - 1))
+  const intervalEnd = history.intervals.length - currentIntervalPage * pageSize
 
   const futureStartsLabel = text('Dates enregistrées à venir', 'Recorded future dates')
 
@@ -63,19 +73,29 @@ export function CycleHistoryView({ periods, today, locale = 'fr' }: CycleHistory
             className="cycle-history-list"
             aria-label={text('Intervalles entre les débuts enregistrés', 'Intervals between recorded period starts')}
           >
-            {[...history.intervals].reverse().map(({ previousStartDate, nextStartDate, durationDays }) => (
-              <li key={`${previousStartDate}-${nextStartDate}`}>
-                <span className="cycle-history-dates">
-                  <time dateTime={previousStartDate}>{formatCivilDate(previousStartDate, locale)}</time>
-                  <span>{text(' au ', ' to ')}</span>
-                  <time dateTime={nextStartDate}>{formatCivilDate(nextStartDate, locale)}</time>
-                </span>
-                <span className="cycle-history-duration">
-                  {durationDays} {durationDays === 1 ? text('jour', 'day') : text('jours', 'days')}
-                </span>
-              </li>
-            ))}
+            {history.intervals
+              .slice(Math.max(0, intervalEnd - pageSize), intervalEnd)
+              .reverse()
+              .map(({ previousStartDate, nextStartDate, durationDays }) => (
+                <li key={`${previousStartDate}-${nextStartDate}`}>
+                  <span className="cycle-history-dates">
+                    <time dateTime={previousStartDate}>{formatCivilDate(previousStartDate, locale)}</time>
+                    <span>{text(' au ', ' to ')}</span>
+                    <time dateTime={nextStartDate}>{formatCivilDate(nextStartDate, locale)}</time>
+                  </span>
+                  <span className="cycle-history-duration">
+                    {durationDays} {durationDays === 1 ? text('jour', 'day') : text('jours', 'days')}
+                  </span>
+                </li>
+              ))}
           </ol>
+          <PageControls
+            label={text('Pages des intervalles', 'Interval pages')}
+            page={currentIntervalPage}
+            count={intervalPageCount}
+            onPage={setIntervalPage}
+            locale={locale}
+          />
         </>
       ) : (
         <p className="cycle-history-empty">
@@ -95,20 +115,30 @@ export function CycleHistoryView({ periods, today, locale = 'fr' }: CycleHistory
         <section className="future-starts" aria-labelledby="future-starts-title">
           <h3 id="future-starts-title">{futureStartsLabel}</h3>
           <ul aria-label={futureStartsLabel}>
-            {futureStarts.map(({ id, startDate }) => (
-              <li key={id}>
-                <time dateTime={startDate}>{formatCivilDate(startDate, locale)}</time>
-                <span>
-                  {text(
-                    'Date à venir; ne contribue pas aux intervalles passés.',
-                    'Future date; not included in past intervals.',
-                  )}
-                </span>
-              </li>
-            ))}
+            {futureStarts
+              .slice(currentFuturePage * pageSize, (currentFuturePage + 1) * pageSize)
+              .map(({ id, startDate }) => (
+                <li key={id}>
+                  <time dateTime={startDate}>{formatCivilDate(startDate, locale)}</time>
+                  <span>
+                    {text(
+                      'Date à venir; ne contribue pas aux intervalles passés.',
+                      'Future date; not included in past intervals.',
+                    )}
+                  </span>
+                </li>
+              ))}
           </ul>
+          <PageControls
+            label={text('Pages des dates à venir', 'Future date pages')}
+            page={currentFuturePage}
+            count={futurePageCount}
+            onPage={setFuturePage}
+            locale={locale}
+          />
         </section>
       )}
     </section>
   )
 }
+import { useState } from 'react'
