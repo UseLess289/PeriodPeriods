@@ -1,9 +1,13 @@
-import type { CivilDate, Period } from '../../domain/periods'
+import { useState } from 'react'
+import {
+  getPeriodDuration,
+  type CivilDate,
+  type DailyIntensity,
+  type Intensity,
+  type Period,
+} from '../../domain/periods'
 import { getCycleHistory } from '../../domain/history/get-cycle-history'
-import { backtestForecast } from '../../domain/forecast/backtest'
-import { estimatePhases, projectYear, type EstimatedPhase } from '../../domain/forecast/project-year'
 import { formatCivilDate, type Locale } from '../shared/format-civil-date'
-import { CycleHistoryView } from '../history/CycleHistoryView'
 
 type StatsViewProps = {
   readonly periods: Period[]
@@ -11,166 +15,340 @@ type StatsViewProps = {
   readonly locale?: Locale
 }
 
-const englishPhaseNames = {
-  menstruelle: 'Menstrual',
-  folliculaire: 'Follicular',
-  ovulatoire: 'Ovulatory',
-  lutéale: 'Luteal',
-} as const satisfies Record<EstimatedPhase['name'], string>
+type CellValue =
+  | { readonly kind: 'intensity'; readonly value: Intensity }
+  | { readonly kind: 'legacy-present' }
+  | { readonly kind: 'legacy-absent' }
+  | { readonly kind: 'not-logged' }
+  | { readonly kind: 'outside' }
+
+const metricLabels: Record<DailyIntensity, { fr: string; en: string }> = {
+  flowIntensity: { fr: 'Flux', en: 'Flow' },
+  crampsIntensity: { fr: 'Crampes', en: 'Cramps' },
+  headacheIntensity: { fr: 'Maux de tête', en: 'Headache' },
+  fatigueIntensity: { fr: 'Fatigue', en: 'Fatigue' },
+}
+const metricOrder = ['flowIntensity', 'crampsIntensity', 'headacheIntensity', 'fatigueIntensity'] as const
+
+const flowLevels = { light: 1, medium: 2, heavy: 3 } as const satisfies Record<NonNullable<Period['flow']>, Intensity>
+
+function median(values: readonly number[]): number {
+  const sorted = [...values].sort((left, right) => left - right)
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
+}
+
+function getDomain(values: readonly number[]) {
+  const minimum = Math.min(...values)
+  const maximum = Math.max(...values)
+  const lower = Math.max(0, Math.floor((minimum - 5) / 10) * 10)
+  let upper = Math.ceil((maximum + 5) / 10) * 10
+  if (upper <= lower) upper = lower + 10
+  return { lower, middle: lower + (upper - lower) / 2, upper }
+}
+
+function getCellValue(period: Period, day: number, metric: DailyIntensity, duration: number): CellValue {
+  if (day > duration) return { kind: 'outside' }
+  const entry = period.dailyLogs?.find((log) => log.day === day)
+  if (!entry) return { kind: 'not-logged' }
+
+  const value = entry[metric]
+  if (value !== undefined) return { kind: 'intensity', value }
+
+  if (metric === 'flowIntensity' && entry.flow) {
+    return { kind: 'intensity', value: flowLevels[entry.flow] }
+  }
+  if (metric === 'headacheIntensity' && entry.headache !== undefined) {
+    return entry.headache ? { kind: 'legacy-present' } : { kind: 'legacy-absent' }
+  }
+
+  return { kind: 'not-logged' }
+}
+
+function cellDescription(value: CellValue, locale: Locale): string {
+  const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
+  if (value.kind === 'intensity') {
+    return `${value.value} ${text('sur 3', 'of 3')}`
+  }
+  if (value.kind === 'legacy-present') return text('Présent, ancien suivi', 'Present, previous tracking')
+  if (value.kind === 'legacy-absent') return text('Absent, ancien suivi', 'Absent, previous tracking')
+  if (value.kind === 'outside') return text('Hors durée enregistrée', 'Outside recorded duration')
+  return text('Non renseigné', 'Not logged')
+}
+
+function cellMark(value: CellValue): string {
+  if (value.kind === 'intensity') return String(value.value)
+  if (value.kind === 'legacy-present') return '✓'
+  if (value.kind === 'legacy-absent') return '0'
+  if (value.kind === 'outside') return '·'
+  return '—'
+}
 
 export function StatsView({ periods, today, locale = 'fr' }: StatsViewProps) {
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
   const history = getCycleHistory(periods, today)
-  const evaluation = backtestForecast(periods, today)
-  const projections = projectYear(periods, today)
-  const lengths = history.intervals.map((interval) => interval.durationDays)
-  const plotted = lengths
-    .map(
-      (value, index) =>
-        `${24 + (index * 452) / Math.max(1, lengths.length - 1)},${115 - Math.min(90, Math.max(0, value - 15) * 3)}`,
+  const [showAllIntervals, setShowAllIntervals] = useState(false)
+  const [metric, setMetric] = useState<DailyIntensity>('flowIntensity')
+  const intervals = showAllIntervals ? history.intervals : history.intervals.slice(-6)
+  const intervalValues = intervals.map(({ durationDays }) => durationDays)
+  const domain = intervalValues.length ? getDomain(intervalValues) : null
+  const latestPeriods = periods
+    .filter(({ startDate }) => startDate <= today)
+    .sort((left, right) => right.startDate.localeCompare(left.startDate))
+    .slice(0, 6)
+  const dayCount = Math.max(0, ...latestPeriods.map(getPeriodDuration))
+  const loggedCount = latestPeriods.reduce((count, period) => {
+    const duration = getPeriodDuration(period)
+    return (
+      count +
+      Array.from({ length: duration }, (_, index) => getCellValue(period, index + 1, metric, duration)).filter(
+        (value) => value.kind === 'intensity' || value.kind === 'legacy-present' || value.kind === 'legacy-absent',
+      ).length
     )
-    .join(' ')
-  const phases = projections[0] ? estimatePhases(projections[0], periods) : []
+  }, 0)
 
   return (
     <div className="view-stack stats-layout" lang={locale}>
-      <section aria-labelledby="stats-chart-title">
-        <h2 id="stats-chart-title">{text('Durées observées des cycles', 'Observed cycle lengths')}</h2>
-        {lengths.length > 0 ? (
+      <section className="stats-section cycle-length-section" aria-labelledby="stats-cycle-title">
+        <div className="stats-section-heading">
+          <div>
+            <p className="section-label">{text('Intervalles observés', 'Observed intervals')}</p>
+            <h2 id="stats-cycle-title">{text('Durée des cycles', 'Cycle length')}</h2>
+          </div>
+          {intervalValues.length > 0 && (
+            <p className="stats-cycle-summary">
+              <strong>
+                {median(intervalValues)} {text('jours', 'days')}
+              </strong>
+              <span>
+                {text('médiane · ', 'median · ')}
+                {intervalValues.length}{' '}
+                {intervalValues.length === 1 ? text('intervalle', 'interval') : text('intervalles', 'intervals')}
+              </span>
+            </p>
+          )}
+        </div>
+
+        <p className="stats-description">
+          {text(
+            'Jours entre deux débuts enregistrés. Chaque point est une durée observée, pas une prévision.',
+            'Days between recorded period starts. Each dot is an observed length, not a prediction.',
+          )}
+        </p>
+
+        {intervals.length > 0 && domain ? (
           <>
-            <svg
-              className="stats-chart"
-              viewBox="0 0 500 140"
-              role="img"
+            <div
+              className="cycle-dot-plot"
+              role="group"
               aria-label={text(
-                `Durées successives en jours : ${lengths.join(', ')}`,
-                `Consecutive cycle lengths in days: ${lengths.join(', ')}`,
+                `${intervals.length} ${intervals.length === 1 ? 'intervalle observé' : 'intervalles observés'}, en jours, du plus ancien au plus récent.`,
+                `${intervals.length} observed ${intervals.length === 1 ? 'interval' : 'intervals'} in days, oldest to newest.`,
               )}
             >
-              <line x1="24" x2="476" y1="115" y2="115" stroke="currentColor" opacity=".35" />
-              <polyline
-                points={plotted}
-                fill="none"
-                stroke="var(--color-accent-deep)"
-                strokeWidth="3"
-                strokeLinejoin="round"
-              />
-              {lengths.map((value, index) => (
-                <circle
-                  key={index}
-                  cx={24 + (index * 452) / Math.max(1, lengths.length - 1)}
-                  cy={115 - Math.min(90, Math.max(0, value - 15) * 3)}
-                  r="4"
-                  fill="var(--color-accent-deep)"
-                >
-                  <title>
-                    {locale === 'en'
-                      ? `${formatCivilDate(history.intervals[index].nextStartDate, locale)}: ${value} ${value === 1 ? 'day' : 'days'}`
-                      : `${history.intervals[index].nextStartDate} : ${value} jours`}
-                  </title>
-                </circle>
-              ))}
-            </svg>
-            <p className="field-hint">
+              <div className="cycle-plot-axis" aria-hidden="true">
+                <span>
+                  {domain.lower} {text('j', 'd')}
+                </span>
+                <span>
+                  {domain.middle} {text('j', 'd')}
+                </span>
+                <span>
+                  {domain.upper} {text('j', 'd')}
+                </span>
+              </div>
+              <ol className="cycle-plot-rows">
+                {intervals.map(({ previousStartDate, nextStartDate, durationDays }) => {
+                  const position = ((durationDays - domain.lower) / (domain.upper - domain.lower)) * 100
+                  return (
+                    <li
+                      className="cycle-plot-row"
+                      key={`${previousStartDate}-${nextStartDate}`}
+                      aria-label={text(
+                        `${formatCivilDate(previousStartDate, locale)} au ${formatCivilDate(nextStartDate, locale)} : ${durationDays} jours`,
+                        `${formatCivilDate(previousStartDate, locale)} to ${formatCivilDate(nextStartDate, locale)}: ${durationDays} days`,
+                      )}
+                    >
+                      <time dateTime={nextStartDate}>{formatCivilDate(nextStartDate, locale)}</time>
+                      <span className="cycle-plot-track" aria-hidden="true">
+                        <span className="cycle-plot-dot" style={{ left: `${position}%` }} />
+                      </span>
+                      <strong>
+                        {durationDays} {text('j', 'd')}
+                      </strong>
+                    </li>
+                  )
+                })}
+              </ol>
+            </div>
+            {history.intervals.length > 6 && (
+              <button
+                className="stats-history-toggle"
+                type="button"
+                aria-expanded={showAllIntervals}
+                onClick={() => setShowAllIntervals((show) => !show)}
+              >
+                {showAllIntervals
+                  ? text('Afficher les 6 derniers', 'Show the latest 6')
+                  : text(
+                      `Voir tout l’historique (${history.intervals.length})`,
+                      `See all history (${history.intervals.length})`,
+                    )}
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="stats-empty">
+            {text(
+              'Enregistre un deuxième début passé pour comparer la durée de tes cycles.',
+              'Record a second past period start to compare cycle lengths.',
+            )}
+          </p>
+        )}
+      </section>
+
+      <section className="stats-section symptom-section" aria-labelledby="stats-symptoms-title">
+        <div className="stats-section-heading">
+          <div>
+            <p className="section-label">{text('Observations saisies', 'Logged observations')}</p>
+            <h2 id="stats-symptoms-title">{text('Jour par jour', 'Day by day')}</h2>
+          </div>
+          {latestPeriods.length > 0 && (
+            <p className="stats-observation-count">
+              {loggedCount} {text('jours renseignés', 'days logged')}
+            </p>
+          )}
+        </div>
+
+        <p className="stats-description">
+          {text(
+            'Compare les mêmes jours sur tes 6 dernières périodes. Une case vide signifie « non renseigné », pas « aucun symptôme ».',
+            'Compare the same days across your 6 latest periods. A blank cell means “not logged”, not “no symptoms”.',
+          )}
+        </p>
+
+        {latestPeriods.length > 0 ? (
+          <>
+            <div className="stats-metric-control">
+              <label htmlFor="stats-metric">{text('Afficher', 'Show')}</label>
+              <select
+                id="stats-metric"
+                value={metric}
+                onChange={(event) => setMetric(event.target.value as DailyIntensity)}
+              >
+                {metricOrder.map((key) => (
+                  <option key={key} value={key}>
+                    {metricLabels[key][locale]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {loggedCount === 0 && (
+              <p className="stats-empty stats-symptom-empty">
+                {text(
+                  'Aucune observation notée pour cet indicateur. Tu peux compléter une période depuis Accueil.',
+                  'Nothing logged for this measure yet. You can add observations from Home.',
+                )}
+              </p>
+            )}
+
+            <div
+              className="symptom-table-scroll"
+              tabIndex={0}
+              aria-label={text('Tableau défilant des observations', 'Scrollable observations table')}
+            >
+              <table className="symptom-table">
+                <caption className="visually-hidden">
+                  {text(
+                    `${metricLabels[metric].fr} par jour pour les six dernières périodes enregistrées`,
+                    `${metricLabels[metric].en} by day for the six latest recorded periods`,
+                  )}
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{text('Période', 'Period')}</th>
+                    {Array.from({ length: dayCount }, (_, index) => (
+                      <th scope="col" key={index + 1}>
+                        {text(`J${index + 1}`, `D${index + 1}`)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {latestPeriods.map((period) => {
+                    const duration = getPeriodDuration(period)
+                    return (
+                      <tr key={period.startDate}>
+                        <th scope="row">
+                          <time dateTime={period.startDate}>{formatCivilDate(period.startDate, locale)}</time>
+                        </th>
+                        {Array.from({ length: dayCount }, (_, index) => {
+                          const value = getCellValue(period, index + 1, metric, duration)
+                          return (
+                            <td
+                              key={index + 1}
+                              className={`symptom-cell symptom-cell-${value.kind}${value.kind === 'intensity' ? ` symptom-level-${value.value}` : ''}`}
+                              aria-label={`${text(`Jour ${index + 1}`, `Day ${index + 1}`)} : ${cellDescription(value, locale)}`}
+                            >
+                              <span aria-hidden="true">{cellMark(value)}</span>
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <ul className="symptom-legend" aria-label={text('Légende du tableau', 'Table legend')}>
+              <li>
+                <span className="symptom-legend-level">1/3</span>
+              </li>
+              <li>
+                <span className="symptom-legend-level">2/3</span>
+              </li>
+              <li>
+                <span className="symptom-legend-level">3/3</span>
+              </li>
+              {metric === 'headacheIntensity' && (
+                <>
+                  <li>
+                    <span className="symptom-legend-level">✓</span>
+                    {text('présent', 'present')}
+                  </li>
+                  <li>
+                    <span className="symptom-legend-level">0</span>
+                    {text('absent', 'absent')}
+                  </li>
+                </>
+              )}
+              <li>
+                <span aria-hidden="true">—</span>
+                {text('non renseigné', 'not logged')}
+              </li>
+              <li>
+                <span aria-hidden="true">·</span>
+                {text('hors durée', 'outside duration')}
+              </li>
+            </ul>
+            <p className="stats-duration-note">
               {text(
-                'Chaque point représente le nombre de jours entre deux débuts enregistrés. La liste ci-dessous reprend les valeurs.',
-                'Each point shows the number of days between two recorded period starts. The values are also listed below.',
+                'Les jours après la durée enregistrée sont atténués. Une période ajoutée sans réglage de durée utilise 5 jours par défaut.',
+                'Days beyond the recorded duration are muted. Periods added without an edited duration use the 5-day default.',
               )}
             </p>
           </>
         ) : (
-          <p>
+          <p className="stats-empty">
             {text(
-              'Deux débuts passés sont nécessaires pour tracer les intervalles.',
-              'Record two past period starts to plot the intervals.',
+              'Aucune période passée à comparer. Enregistre un début depuis Accueil pour commencer.',
+              'No past periods to compare yet. Record a period start from Home to begin.',
             )}
           </p>
         )}
       </section>
-      <section aria-labelledby="stats-evaluation-title">
-        <h2 id="stats-evaluation-title">{text('Évaluation sur ton historique', 'Evaluation on your history')}</h2>
-        {evaluation ? (
-          <p>
-            {text(
-              `Sur ${evaluation.evaluatedCycles} début(s) passés masqués tour à tour, l’erreur absolue médiane de la date centrale était de ${evaluation.medianAbsoluteErrorDays} jour(s).${evaluation.rangeCoverage === null ? '' : ` Les plages disponibles couvraient ${Math.round(evaluation.rangeCoverage * 100)} % des débuts évalués.`} Ce résultat décrit les saisies passées, pas une précision future garantie.`,
-              `Across ${evaluation.evaluatedCycles} past starts held out one at a time, the median absolute error of the central date was ${evaluation.medianAbsoluteErrorDays} day(s).${evaluation.rangeCoverage === null ? '' : ` Available ranges covered ${Math.round(evaluation.rangeCoverage * 100)}% of evaluated starts.`} This describes past logs, not guaranteed future accuracy.`,
-            )}
-          </p>
-        ) : (
-          <p>
-            {text(
-              'Il faut davantage de débuts enregistrés pour comparer les estimations aux dates observées.',
-              'More recorded starts are needed to compare estimates with observations.',
-            )}
-          </p>
-        )}
-      </section>
-      <section aria-labelledby="stats-year-title">
-        <h2 id="stats-year-title">
-          {text('Projections conditionnelles sur un an', 'Conditional projections for the next year')}
-        </h2>
-        <p>
-          {text(
-            'Ces dates supposent que les intervalles futurs suivent ceux observés. Les plages s’élargissent au fil des cycles ; elles ne sont pas des garanties.',
-            'These dates assume future intervals follow the same pattern as recorded intervals. The ranges widen over time and are not guarantees.',
-          )}
-        </p>
-        {projections.length === 0 ? (
-          <p>
-            {text(
-              'Trois intervalles passés sont nécessaires pour afficher des projections.',
-              'Three past intervals are needed to show projections.',
-            )}
-          </p>
-        ) : (
-          <ol className="projected-list">
-            {projections.map((cycle) => (
-              <li key={cycle.index}>
-                <time dateTime={cycle.startDate}>{formatCivilDate(cycle.startDate, locale)}</time>
-                <span>
-                  {text('Plage conditionnelle : ', 'Conditional range: ')}
-                  {formatCivilDate(cycle.earliestStartDate, locale)} – {formatCivilDate(cycle.latestStartDate, locale)}
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
-      <section aria-labelledby="stats-phases-title">
-        <h2 id="stats-phases-title">{text('Quatre phases estimées', 'Four estimated phases')}</h2>
-        <p>
-          {text(
-            'Schéma théorique des quatre phases : seule la durée des règles est projetée depuis les durées saisies. Les repères colorés du calendrier utilisent des conventions approximatives; les dates de règles seules ne permettent pas de confirmer les autres frontières. Ce schéma ne permet pas de déterminer une fenêtre contraceptive.',
-            'A theoretical diagram of four phases: only period length is projected from recorded lengths. Colored calendar markers use approximate conventions; period dates alone cannot confirm the other boundaries. Do not use this diagram to identify a contraceptive window.',
-          )}
-        </p>
-        {phases.length === 0 ? (
-          <p>
-            {text(
-              'Une fin de règles enregistrée et un historique suffisant sont nécessaires pour afficher ces repères.',
-              'A recorded period end date and enough cycle history are needed to show these phases.',
-            )}
-          </p>
-        ) : (
-          <div
-            className="phase-chart"
-            role="list"
-            aria-label={text('Phases estimées du prochain cycle', 'Estimated phases of the next cycle')}
-          >
-            {phases.map((phase) => (
-              <div role="listitem" className={`phase-segment phase-${phase.name}`} key={phase.name}>
-                <strong>{locale === 'en' ? englishPhaseNames[phase.name] : phase.name}</strong>
-                <span>
-                  {phase.startDate && phase.endDate
-                    ? `${formatCivilDate(phase.startDate, locale)} – ${formatCivilDate(phase.endDate, locale)}`
-                    : text('Dates non déterminées', 'Dates not determined')}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-      <CycleHistoryView periods={periods} today={today} locale={locale} />
     </div>
   )
 }

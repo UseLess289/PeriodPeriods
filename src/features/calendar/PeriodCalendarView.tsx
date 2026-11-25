@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { addCivilDays, buildCalendarMonth, shiftCalendarMonth } from '../../domain/dates'
 import { cyclePhaseNames, estimateCyclePhaseRanges } from '../../domain/forecast/estimate-cycle-phases'
-import type { CivilDateRange, CyclePhaseName } from '../../domain/forecast/estimate-cycle-phases'
+import type { CivilDateRange, CyclePhaseName, CyclePhaseRanges } from '../../domain/forecast/estimate-cycle-phases'
 import type { PeriodStartEstimate } from '../../domain/forecast/estimate-next-period'
 import { daysBetweenCivilDates, getPeriodDuration } from '../../domain/periods'
 import type { CivilDate, Period } from '../../domain/periods'
@@ -25,6 +25,18 @@ const estimatedPhaseDescriptions: Record<CyclePhaseName, { fr: string; en: strin
 
 function dateIsInRange(range: CivilDateRange | null, date: CivilDate): boolean {
   return range !== null && date >= range.startDate && date <= range.endDate
+}
+
+function expectedPhaseAtDate(phaseRanges: CyclePhaseRanges | null, date: CivilDate): CyclePhaseName | null {
+  return cyclePhaseNames.find((phase) => dateIsInRange(phaseRanges?.[phase].expected ?? null, date)) ?? null
+}
+
+function phaseTint(phase: CyclePhaseName): string {
+  return `color-mix(in srgb, var(--phase-${phase}) 24%, var(--color-canvas))`
+}
+
+function phaseTransitionTint(from: CyclePhaseName, to: CyclePhaseName): string {
+  return `color-mix(in srgb, color-mix(in srgb, var(--phase-${from}) 50%, var(--phase-${to}) 50%) 24%, var(--color-canvas))`
 }
 
 function phaseDescription(phase: CyclePhaseName, possible: boolean, locale: Locale): string {
@@ -131,6 +143,13 @@ export function PeriodCalendarView({
     periods.filter((period) => period.startDate.startsWith(monthStart.slice(0, 7))).map((period) => period.startDate),
   )
   const phaseRanges = estimate.kind === 'insufficient' ? null : estimateCyclePhaseRanges(periods, estimate, today)
+  const expectedPhaseForCalendarDate = (date: CivilDate, inDisplayedMonth: boolean): CyclePhaseName | null => {
+    if (!phaseRanges || !inDisplayedMonth) return null
+    const isRecorded = recordedSpans.some(
+      ({ start, duration }) => date >= start && daysBetweenCivilDates(start, date) < duration,
+    )
+    return isRecorded ? 'menstrual' : expectedPhaseAtDate(phaseRanges, date)
+  }
   const orderedSelection = [...selectedDates].sort()
   const weekDays = getCalendarWeekdays(firstDayOfWeek, locale)
   const count = orderedSelection.length
@@ -498,7 +517,7 @@ export function PeriodCalendarView({
           <tbody>
             {Array.from({ length: calendarDays.length / 7 }, (_, weekIndex) => (
               <tr key={calendarDays[weekIndex * 7].date}>
-                {calendarDays.slice(weekIndex * 7, weekIndex * 7 + 7).map((day) => {
+                {calendarDays.slice(weekIndex * 7, weekIndex * 7 + 7).map((day, weekdayIndex) => {
                   const dayNumber = Number(day.date.slice(-2))
                   const hasPeriodStart = monthPeriodStarts.has(day.date)
                   const isFutureStart = hasPeriodStart && day.date > today
@@ -525,11 +544,27 @@ export function PeriodCalendarView({
                   const expectedPhases = datePhases.filter(({ possible }) => !possible)
                   const possiblePhases = datePhases.filter(({ possible }) => possible)
                   const isOvulationPeak = expectedPhases.some(({ phase }) => phase === 'ovulatory')
-                  const phaseBackgroundLayers = datePhases.map(({ phase, possible }) => {
-                    const opacity = possible ? 8 : 24
-                    const color = `color-mix(in srgb, var(--phase-${phase}) ${opacity}%, transparent)`
-                    return `linear-gradient(${color}, ${color})`
-                  })
+                  const expectedPhase = expectedPhases[0]?.phase ?? null
+                  const dayIndex = weekIndex * 7 + weekdayIndex
+                  const previousDay = dayIndex > 0 ? calendarDays[dayIndex - 1] : null
+                  const nextDay = dayIndex < calendarDays.length - 1 ? calendarDays[dayIndex + 1] : null
+                  const previousPhase = previousDay
+                    ? expectedPhaseForCalendarDate(previousDay.date, previousDay.inDisplayedMonth)
+                    : null
+                  const nextPhase = nextDay
+                    ? expectedPhaseForCalendarDate(nextDay.date, nextDay.inDisplayedMonth)
+                    : null
+                  const hasPreviousPhaseTransition = previousPhase !== null && previousPhase !== expectedPhase
+                  const hasNextPhaseTransition = nextPhase !== null && nextPhase !== expectedPhase
+                  const phaseBackground = expectedPhase
+                    ? hasPreviousPhaseTransition && hasNextPhaseTransition
+                      ? `linear-gradient(90deg, ${phaseTransitionTint(previousPhase, expectedPhase)} 0%, ${phaseTint(expectedPhase)} 50%, ${phaseTransitionTint(expectedPhase, nextPhase)} 100%)`
+                      : hasPreviousPhaseTransition
+                        ? `linear-gradient(90deg, ${phaseTransitionTint(previousPhase, expectedPhase)} 0%, ${phaseTint(expectedPhase)} 100%)`
+                        : hasNextPhaseTransition
+                          ? `linear-gradient(90deg, ${phaseTint(expectedPhase)} 0%, ${phaseTransitionTint(expectedPhase, nextPhase)} 100%)`
+                          : undefined
+                    : undefined
                   const isForecastDay =
                     !isRecordedDay && dateIsInRange(phaseRanges?.menstrual.expected ?? null, day.date)
                   const isForecastRange =
@@ -570,6 +605,12 @@ export function PeriodCalendarView({
                       <span className="calendar-day-number">{dayNumber}</span>
                       <span className="calendar-markers" aria-hidden="true">
                         {isForecastRange && <span className="forecast-range-mark" />}
+                        {possiblePhases.map(({ phase }) => (
+                          <span
+                            key={`possible-${phase}`}
+                            className={`phase-possible-mark phase-possible-mark-${phase}`}
+                          />
+                        ))}
                         {(isForecastLowerBound || isForecastUpperBound) && <span className="forecast-bound-mark" />}
                       </span>
                     </>
@@ -585,8 +626,11 @@ export function PeriodCalendarView({
                     <td
                       key={day.date}
                       style={
-                        phaseBackgroundLayers.length > 0
-                          ? { backgroundImage: phaseBackgroundLayers.join(', ') }
+                        expectedPhase
+                          ? {
+                              backgroundColor: phaseTint(expectedPhase),
+                              ...(phaseBackground ? { backgroundImage: phaseBackground } : {}),
+                            }
                           : undefined
                       }
                       className={[

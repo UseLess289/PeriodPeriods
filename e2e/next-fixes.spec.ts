@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { recordStart } from './record-start'
 
-test('shows phase colors and possible-date halos in the calendar', async ({ page }) => {
+test('shows blended phase colors and dotted possible-date markers in the calendar', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-03-26T12:00:00.000Z') })
   await page.goto('/')
 
@@ -20,6 +20,7 @@ test('shows phase colors and possible-date halos in the calendar', async ({ page
   await expect(page.locator('#phase-description-2025-04-09')).toContainText('phase lutéale')
   await expect(ovulation.locator('xpath=..')).toHaveClass(/phase-expected-ovulatory/)
   await expect(ovulation.locator('xpath=..')).toHaveClass(/is-ovulation-peak/)
+  await expect(ovulation.locator('xpath=..')).toHaveAttribute('style', /linear-gradient\(90deg/)
 
   const possibleOvulation = calendar.locator('time[datetime="2025-04-07"]')
   await expect(possibleOvulation).toHaveAttribute('aria-describedby', 'phase-description-2025-04-07')
@@ -27,6 +28,10 @@ test('shows phase colors and possible-date halos in the calendar', async ({ page
     'Phase folliculaire estimée; Date possible : ovulation',
   )
   await expect(possibleOvulation.locator('xpath=..')).toHaveClass(/phase-possible-ovulatory/)
+  await expect(possibleOvulation.locator('xpath=..').locator('.phase-possible-mark-ovulatory')).toHaveCSS(
+    'border-style',
+    'dotted',
+  )
 
   const phaseLegend = page.getByRole('list', { name: 'Phases du cycle' })
   await expect(phaseLegend.getByRole('listitem')).toHaveCount(5)

@@ -270,7 +270,7 @@ describe('PeriodPeriods app', () => {
     const statsHeading = screen.getByRole('heading', { name: 'Statistiques' })
     expect(statsHeading).toHaveFocus()
     expect(statsButton).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('heading', { name: 'Durées observées des cycles' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Durée des cycles' })).toBeInTheDocument()
   })
 
   it('shows the settings destination as current when selected', async () => {
