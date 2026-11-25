@@ -2,10 +2,25 @@ import { expect, test } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 
 async function showDailyDetails(dialog: Locator) {
+  const next = dialog.getByRole('button', { name: 'Suivant', exact: true })
+  if (await next.isVisible()) {
+    await next.click()
+    return
+  }
+
   const details = dialog.locator('details')
   if ((await details.count()) && !(await details.evaluate((element: HTMLDetailsElement) => element.open))) {
     await details.locator('summary').click()
   }
+}
+
+async function savePeriod(dialog: Locator) {
+  const validate = dialog.getByRole('button', { name: 'Valider', exact: true })
+  if (await validate.isVisible()) {
+    await validate.click()
+    return
+  }
+  await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click()
 }
 
 async function setIntensity(dialog: Locator, label: string, value: number) {
@@ -28,7 +43,7 @@ test('enregistre une période complète et la complète depuis la fenêtre de sa
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
   await page.goto('/')
   await page.getByRole('button', { name: 'Ajouter un événement' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Enregistrer une période' })
+  const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Début des règles').fill('2025-03-12')
   const duration = dialog.getByRole('slider', { name: 'Durée (jours)' })
   await expect(duration).toHaveValue('5')
@@ -38,9 +53,11 @@ test('enregistre une période complète et la complète depuis la fenêtre de sa
   await setIntensity(dialog, 'Flux', 3)
   await setIntensity(dialog, 'Maux de tête', 1)
   await setIntensity(dialog, 'Crampes', 1)
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click()
+  await savePeriod(dialog)
   await expect(dialog).not.toBeVisible()
-  await expect(page.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Modifier la période commencée le 12 mars 2025, jour 1' }),
+  ).toBeVisible()
 
   await page.getByRole('button', { name: 'Ajouter un événement' }).click()
   const editing = page.getByRole('dialog')
@@ -64,7 +81,7 @@ test('enregistre une période complète et la complète depuis la fenêtre de sa
   await editing.getByRole('button', { name: 'Annuler' }).click()
 })
 
-test('enregistre aujourd’hui avec deux taps au même endroit et exporte les jours relatifs', async ({ page }) => {
+test('enregistre aujourd’hui avec le parcours adapté à la largeur et exporte les jours relatifs', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
   await page.goto('/')
   const add = page.getByRole('button', { name: 'Ajouter un événement' })
@@ -78,12 +95,31 @@ test('enregistre aujourd’hui avec deux taps au même endroit et exporte les jo
   await expect(dialog.getByLabel('Durée (jours)')).toHaveValue('5')
   if ((page.viewportSize()?.width ?? 0) <= 480) {
     await expect(dialog.getByRole('heading', { name: 'Enregistrer une période' })).toBeFocused()
+    await expect(dialog.getByRole('button', { name: 'Suivant' })).toBeVisible()
   } else {
     await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeFocused()
   }
   await page.mouse.click(x, y)
+  if ((page.viewportSize()?.width ?? 0) <= 480) {
+    await expect(dialog.getByRole('heading', { name: 'Maux et symptômes' })).toBeFocused()
+    const day = dialog.getByLabel('Jour de la période')
+    await expect(day.locator('option')).toHaveCount(5)
+    await expect(day.locator('option').last()).toHaveText(/Jour 5 – 24 mars 2025/)
+    await day.selectOption('5')
+    await dialog.getByRole('combobox', { name: 'Flux' }).selectOption('3')
+    await page.mouse.click(x, y)
+  }
   await expect(dialog).toBeHidden()
   await expect(page.locator('.has-period-day')).toHaveCount(5)
+
+  if ((page.viewportSize()?.width ?? 0) <= 480) {
+    await add.click()
+    const editing = page.getByRole('dialog')
+    await editing.getByRole('button', { name: 'Suivant' }).click()
+    await editing.getByLabel('Jour de la période').selectOption('5')
+    await expect(editing.getByRole('combobox', { name: 'Flux' })).toHaveValue('3')
+    await editing.getByRole('button', { name: 'Annuler' }).click()
+  }
 
   await page.getByRole('button', { name: 'Réglages' }).click()
   const download = page.waitForEvent('download')

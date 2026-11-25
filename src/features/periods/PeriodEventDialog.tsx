@@ -1,12 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { FormEvent, KeyboardEvent } from 'react'
+import type { FormEvent, KeyboardEvent, ReactNode } from 'react'
+import { AnimatePresence, motion, useIsPresent, usePresenceData, useReducedMotion } from 'motion/react'
 import { addCivilDays } from '../../domain/dates'
-import {
-  DEFAULT_PERIOD_DURATION,
-  daysBetweenCivilDates,
-  getPeriodDuration,
-  pickDailyIntensities,
-} from '../../domain/periods'
+import { DEFAULT_PERIOD_DURATION, getPeriodDuration, pickDailyIntensities } from '../../domain/periods'
 import type { CivilDate, DailyIntensity, Intensity, NewPeriod, Period, PeriodDay } from '../../domain/periods'
 import { formatCivilDate } from '../shared/format-civil-date'
 import type { Locale } from '../shared/format-civil-date'
@@ -16,6 +12,7 @@ type Props = {
   readonly locale?: Locale
   open: boolean
   today: CivilDate
+  initialStartDate: CivilDate
   periods: readonly Period[]
   onClose: () => void
   onSave: (event: NewPeriod) => Promise<string | null>
@@ -27,24 +24,55 @@ const englishErrors = new Map([
   ['L’enregistrement a échoué. Vérifie les données et réessaie.', 'Could not save. Check the details and try again.'],
 ])
 
-export function PeriodEventDialog({ open, today, periods, onClose, onSave, locale = 'fr' }: Props) {
+function AnimatedStepPanel({ reducedMotion, children }: { reducedMotion: boolean; children: ReactNode }) {
+  const isPresent = useIsPresent()
+  const direction = usePresenceData() as number
+  const variants = {
+    enter: (direction: number) => ({ opacity: 0, x: reducedMotion ? 0 : direction * 18 }),
+    center: { opacity: 1, x: 0 },
+    exit: (direction: number) => ({ opacity: 0, x: reducedMotion ? 0 : direction * -18 }),
+  }
+  const transition = reducedMotion
+    ? { duration: 0.12, ease: 'easeOut' as const }
+    : { type: 'spring' as const, bounce: 0, duration: 0.32 }
+
+  return (
+    <motion.div
+      className="event-dialog-stage"
+      aria-hidden={!isPresent || undefined}
+      inert={!isPresent}
+      custom={direction}
+      variants={variants}
+      initial="enter"
+      animate="center"
+      exit="exit"
+      transition={transition}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+export function PeriodEventDialog({ open, today, initialStartDate, periods, onClose, onSave, locale = 'fr' }: Props) {
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
   const dialog = useRef<HTMLDialogElement>(null)
   const form = useRef<HTMLFormElement>(null)
   const dialogContent = useRef<HTMLDivElement>(null)
   const dialogTitle = useRef<HTMLHeadingElement>(null)
   const startDateInput = useRef<HTMLInputElement>(null)
-  const trackingDetails = useRef<HTMLDetailsElement>(null)
+  const prefersReducedMotion = useReducedMotion()
   const [isMobileViewport, setIsMobileViewport] = useState(
     () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 30rem)').matches === true,
   )
-  const todayEntry = periods.find((period) => period.startDate === today)
-  const [startDate, setStartDate] = useState(today)
+  const [step, setStep] = useState<1 | 2>(1)
+  const [stepDirection, setStepDirection] = useState(1)
+  const initialEntry = periods.find((period) => period.startDate === initialStartDate)
+  const [startDate, setStartDate] = useState(initialStartDate)
   const saveButton = useRef<HTMLButtonElement>(null)
   const [durationDays, setDuration] = useState(() =>
-    todayEntry ? getPeriodDuration(todayEntry) : DEFAULT_PERIOD_DURATION,
+    initialEntry ? getPeriodDuration(initialEntry) : DEFAULT_PERIOD_DURATION,
   )
-  const [dailyLogs, setDailyLogs] = useState<PeriodDay[]>(() => todayEntry?.dailyLogs ?? [])
+  const [dailyLogs, setDailyLogs] = useState<PeriodDay[]>(() => initialEntry?.dailyLogs ?? [])
   const [activeDay, setActiveDay] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [dateError, setDateError] = useState(false)
@@ -65,21 +93,27 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
     if (!element) return
     if (open && !element.open) {
       element.showModal()
+      const initialPeriod = periods.find((period) => period.startDate === initialStartDate)
+      setStartDate(initialStartDate)
+      setDuration(initialPeriod ? getPeriodDuration(initialPeriod) : DEFAULT_PERIOD_DURATION)
+      setDailyLogs(initialPeriod?.dailyLogs ?? [])
+      setActiveDay(1)
+      setError(null)
+      setDateError(false)
+      setStep(1)
+      setStepDirection(1)
       if (form.current) form.current.scrollTop = 0
       if (dialogContent.current) dialogContent.current.scrollTop = 0
-      trackingDetails.current?.removeAttribute('open')
       if (isMobileViewport) dialogTitle.current?.focus({ preventScroll: true })
       else saveButton.current?.focus({ preventScroll: true })
     }
     if (!open && element.open) element.close()
-  }, [isMobileViewport, open])
+  }, [initialStartDate, isMobileViewport, open, periods])
 
   const existing = periods.find((period) => period.startDate === startDate)
   const minimumDuration = Math.max(1, ...dailyLogs.map(({ day }) => day))
   const maximumDuration = Math.max(14, existing ? getPeriodDuration(existing) : 1)
-  const elapsedDays =
-    /^\d{4}-\d{2}-\d{2}$/.test(startDate) && startDate <= today ? daysBetweenCivilDates(startDate, today) + 1 : 0
-  const dayCount = Math.min(366, Number.isSafeInteger(durationDays) ? durationDays : 0, elapsedDays)
+  const dayCount = Math.min(366, Number.isSafeInteger(durationDays) ? durationDays : 0)
   const selectedDay = Math.min(activeDay, dayCount)
   const dailyLog = dailyLogs.find(({ day }) => day === selectedDay)
   const metrics: { key: DailyIntensity; label: string; legacy?: string }[] = [
@@ -119,7 +153,52 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
   function close() {
     if (saving) return
     changeStart(today)
+    setStep(1)
     onClose()
+  }
+
+  function validatePeriod() {
+    if (!startDate || startDate > today) {
+      setDateError(true)
+      setError(
+        !startDate
+          ? text('Indique une date de début.', 'Choose a start date.')
+          : text('Choisis une date qui ne dépasse pas aujourd’hui.', 'Choose today or an earlier date.'),
+      )
+      requestAnimationFrame(() => startDateInput.current?.focus())
+      return false
+    }
+    if (!Number.isSafeInteger(durationDays) || durationDays < minimumDuration) {
+      setDateError(false)
+      setError(text('Vérifie la durée choisie.', 'Check the selected duration.'))
+      return false
+    }
+    setError(null)
+    setDateError(false)
+    return true
+  }
+
+  function goToObservations() {
+    if (!validatePeriod()) return
+    setStepDirection(1)
+    setStep(2)
+    requestAnimationFrame(() => dialogTitle.current?.focus({ preventScroll: true }))
+  }
+
+  function goToPeriod() {
+    setStepDirection(-1)
+    setError(null)
+    setDateError(false)
+    setStep(1)
+    requestAnimationFrame(() => {
+      if (dialogContent.current) dialogContent.current.scrollTop = 0
+      dialogTitle.current?.focus({ preventScroll: true })
+    })
+  }
+
+  function advanceOrSave() {
+    if (step === 1) goToObservations()
+    else if (!saving) form.current?.requestSubmit()
   }
 
   function keepFocusInDialog(event: KeyboardEvent<HTMLDialogElement>) {
@@ -129,7 +208,12 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
       dialog.current.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
       ),
-    ).filter((element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden')
+    ).filter(
+      (element) =>
+        element.getClientRects().length > 0 &&
+        getComputedStyle(element).visibility !== 'hidden' &&
+        !element.closest('[inert]'),
+    )
     const first = focusable[0]
     const last = focusable.at(-1)
     const active = document.activeElement
@@ -160,21 +244,11 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (saving) return
-    if (!startDate || startDate > today) {
-      setDateError(true)
-      setError(
-        !startDate
-          ? text('Indique une date de début.', 'Choose a start date.')
-          : text('Choisis une date qui ne dépasse pas aujourd’hui.', 'Choose today or an earlier date.'),
-      )
-      requestAnimationFrame(() => startDateInput.current?.focus())
+    if (isMobileViewport && step === 1) {
+      goToObservations()
       return
     }
-    if (!Number.isSafeInteger(durationDays) || durationDays < minimumDuration) {
-      setDateError(false)
-      setError(text('Vérifie la durée choisie.', 'Check the selected duration.'))
-      return
-    }
+    if (!validatePeriod()) return
     setSaving(true)
     const issue = await onSave({
       startDate,
@@ -246,6 +320,62 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
     )
   }
 
+  function renderPeriodFields() {
+    return (
+      <>
+        <div className="event-tile event-start-tile">
+          <label htmlFor="event-start">{text('Début des règles', 'Period start')}</label>
+          <input
+            id="event-start"
+            name="period-start"
+            ref={startDateInput}
+            type="date"
+            autoComplete="off"
+            required
+            max={today}
+            value={startDate}
+            aria-invalid={dateError || undefined}
+            aria-describedby={dateError ? 'event-form-error' : undefined}
+            onChange={(event) => changeStart(event.target.value)}
+          />
+        </div>
+        <div className="event-tile event-duration-tile">
+          <div className="event-duration-heading">
+            <label htmlFor="event-duration">{text('Durée (jours)', 'Duration (days)')}</label>
+            <span aria-hidden="true">
+              {durationDays} {text(durationDays === 1 ? 'jour' : 'jours', durationDays === 1 ? 'day' : 'days')}
+            </span>
+          </div>
+          <input
+            id="event-duration"
+            name="period-duration"
+            type="range"
+            autoComplete="off"
+            min={minimumDuration}
+            max={maximumDuration}
+            value={durationDays}
+            onChange={(event) => {
+              setDuration(event.target.valueAsNumber)
+              if (!dateError) setError(null)
+            }}
+          />
+          <div className="event-duration-endpoints" aria-hidden="true">
+            <span>{minimumDuration}</span>
+            <span>{maximumDuration}</span>
+          </div>
+          {minimumDuration > 1 && (
+            <p className="field-hint">
+              {text(
+                'La durée minimale inclut les jours déjà renseignés.',
+                'The minimum duration includes days you’ve already logged.',
+              )}
+            </p>
+          )}
+        </div>
+      </>
+    )
+  }
+
   const errorRegion = (
     <p
       id="event-form-error"
@@ -276,64 +406,17 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
       <form id="period-event-form" ref={form} onSubmit={submit} noValidate>
         <div className="event-dialog-heading">
           <h2 id="event-dialog-title" ref={dialogTitle} tabIndex={-1}>
-            {existing
-              ? text('Compléter une période', 'Edit period details')
-              : text('Enregistrer une période', 'Record a period')}
+            {isMobileViewport && step === 2
+              ? text('Maux et symptômes', 'Symptoms and notes')
+              : existing
+                ? text('Compléter une période', 'Edit period details')
+                : text('Enregistrer une période', 'Record a period')}
           </h2>
           <button className="text-button" type="button" disabled={saving} onClick={close}>
             {text('Annuler', 'Cancel')}
           </button>
         </div>
         <div className="event-dialog-content" ref={dialogContent}>
-          <div className="event-tile event-start-tile">
-            <label htmlFor="event-start">{text('Début des règles', 'Period start')}</label>
-            <input
-              id="event-start"
-              name="period-start"
-              ref={startDateInput}
-              type="date"
-              autoComplete="off"
-              required
-              max={today}
-              value={startDate}
-              aria-invalid={dateError || undefined}
-              aria-describedby={dateError ? 'event-form-error' : undefined}
-              onChange={(event) => changeStart(event.target.value)}
-            />
-          </div>
-          <div className="event-tile event-duration-tile">
-            <div className="event-duration-heading">
-              <label htmlFor="event-duration">{text('Durée (jours)', 'Duration (days)')}</label>
-              <span aria-hidden="true">
-                {durationDays} {text(durationDays === 1 ? 'jour' : 'jours', durationDays === 1 ? 'day' : 'days')}
-              </span>
-            </div>
-            <input
-              id="event-duration"
-              name="period-duration"
-              type="range"
-              autoComplete="off"
-              min={minimumDuration}
-              max={maximumDuration}
-              value={durationDays}
-              onChange={(event) => {
-                setDuration(event.target.valueAsNumber)
-                if (!dateError) setError(null)
-              }}
-            />
-            <div className="event-duration-endpoints" aria-hidden="true">
-              <span>{minimumDuration}</span>
-              <span>{maximumDuration}</span>
-            </div>
-            {minimumDuration > 1 && (
-              <p className="field-hint">
-                {text(
-                  'La durée minimale inclut les jours déjà renseignés.',
-                  'The minimum duration includes days you’ve already logged.',
-                )}
-              </p>
-            )}
-          </div>
           <p id="event-intensity-hint" className="visually-hidden">
             {isMobileViewport
               ? text(
@@ -346,20 +429,59 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
                 )}
           </p>
           {isMobileViewport ? (
-            <details className="event-details" ref={trackingDetails}>
-              <summary className="event-details-summary">
-                <span>{text('Suivi par jour', 'Daily details')}</span>
-                <span className="event-details-optional">{text('Facultatif', 'Optional')}</span>
-              </summary>
-              <div className="event-details-content">{renderDayTracking()}</div>
-            </details>
+            <>
+              <p className="event-step-progress">
+                {step === 1
+                  ? text('Étape 1 sur 2 · Date et durée', 'Step 1 of 2 · Date and duration')
+                  : text('Étape 2 sur 2 · Maux', 'Step 2 of 2 · Symptoms')}
+                <span className="event-step-progress-track" aria-hidden="true">
+                  <span className={step === 1 ? 'is-first-step' : 'is-second-step'} />
+                </span>
+              </p>
+              <div className="event-step-stack">
+                <AnimatePresence initial={false} custom={stepDirection}>
+                  <AnimatedStepPanel key={`mobile-step-${step}`} reducedMotion={Boolean(prefersReducedMotion)}>
+                    {step === 1 ? (
+                      renderPeriodFields()
+                    ) : (
+                      <>
+                        <button className="text-button event-step-back" type="button" onClick={goToPeriod}>
+                          {text('Retour à la période', 'Back to period')}
+                        </button>
+                        <p className="event-step-description">
+                          {text(
+                            'Ajoute les observations de chaque jour. Tu peux aussi valider sans en ajouter.',
+                            'Add observations for each day, or validate without adding any.',
+                          )}
+                        </p>
+                        <p className="event-period-context">
+                          {text(
+                            `${formatCivilDate(startDate, locale)} · ${durationDays} ${durationDays === 1 ? 'jour' : 'jours'}`,
+                            `${formatCivilDate(startDate, locale)} · ${durationDays} ${durationDays === 1 ? 'day' : 'days'}`,
+                          )}
+                        </p>
+                        {renderDayTracking()}
+                        {Boolean(existing?.symptoms?.length) && (
+                          <p className="event-legacy-symptoms field-hint">
+                            {text('Anciens symptômes :', 'Previous symptoms:')} {existing?.symptoms?.join(', ')}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </AnimatedStepPanel>
+                </AnimatePresence>
+              </div>
+            </>
           ) : (
-            renderDayTracking()
-          )}
-          {Boolean(existing?.symptoms?.length) && (
-            <p className="event-legacy-symptoms field-hint">
-              {text('Anciens symptômes :', 'Previous symptoms:')} {existing?.symptoms?.join(', ')}
-            </p>
+            <>
+              {renderPeriodFields()}
+              {renderDayTracking()}
+              {Boolean(existing?.symptoms?.length) && (
+                <p className="event-legacy-symptoms field-hint">
+                  {text('Anciens symptômes :', 'Previous symptoms:')} {existing?.symptoms?.join(', ')}
+                </p>
+              )}
+            </>
           )}
           {!isMobileViewport && errorRegion}
         </div>
@@ -368,11 +490,20 @@ export function PeriodEventDialog({ open, today, periods, onClose, onSave, local
       <button
         ref={saveButton}
         className="floating-add event-save"
-        type="submit"
+        type={isMobileViewport ? 'button' : 'submit'}
         form="period-event-form"
         disabled={saving}
+        onClick={isMobileViewport ? advanceOrSave : undefined}
       >
-        {saving ? text('Enregistrement…', 'Saving…') : text('Enregistrer', 'Save')}
+        {isMobileViewport
+          ? step === 1
+            ? text('Suivant', 'Next')
+            : saving
+              ? text('Validation…', 'Saving…')
+              : text('Valider', 'Validate')
+          : saving
+            ? text('Enregistrement…', 'Saving…')
+            : text('Enregistrer', 'Save')}
       </button>
     </dialog>
   )

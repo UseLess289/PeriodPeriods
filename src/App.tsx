@@ -71,10 +71,33 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
   const [loadError, setLoadError] = useState(false)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const saveMessageTimeout = useRef<number | null>(null)
   const [eventDialogOpen, setEventDialogOpen] = useState(false)
+  const [eventStartDate, setEventStartDate] = useState<CivilDate | null>(null)
   const [hasNavigated, setHasNavigated] = useState(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const previousViewRef = useRef(activeView)
+
+  useEffect(
+    () => () => {
+      if (saveMessageTimeout.current !== null) window.clearTimeout(saveMessageTimeout.current)
+    },
+    [],
+  )
+
+  function updateSaveMessage(message: string | null, dismissAfterMs?: number) {
+    if (saveMessageTimeout.current !== null) {
+      window.clearTimeout(saveMessageTimeout.current)
+      saveMessageTimeout.current = null
+    }
+    setSaveMessage(message)
+    if (message && dismissAfterMs !== undefined) {
+      saveMessageTimeout.current = window.setTimeout(() => {
+        setSaveMessage((current) => (current === message ? null : current))
+        saveMessageTimeout.current = null
+      }, dismissAfterMs)
+    }
+  }
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -177,7 +200,10 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
           [...(current ?? []), saved].sort((left, right) => left.startDate.localeCompare(right.startDate)),
         )
       }
-      setSaveMessage(locale === 'en' ? 'Period saved on this device.' : 'Période enregistrée sur cet appareil.')
+      updateSaveMessage(
+        locale === 'en' ? 'Period saved on this device.' : 'Période enregistrée sur cet appareil.',
+        1000,
+      )
       return null
     } catch {
       return 'L’enregistrement a échoué. Vérifie les données et réessaie.'
@@ -208,7 +234,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
     setPeriods(loadedPeriods)
     setSettings(loadedSettings)
     setLoadError(false)
-    setSaveMessage(null)
+    updateSaveMessage(null)
   }
 
   async function changeFirstDayOfWeek(firstDayOfWeek: 0 | 1) {
@@ -217,7 +243,7 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
       const saved = await store.saveSettings({ ...settings, firstDayOfWeek })
       setSettings(saved)
     } catch {
-      setSaveMessage(locale === 'en' ? 'The setting could not be saved.' : 'Le réglage n’a pas pu être enregistré.')
+      updateSaveMessage(locale === 'en' ? 'The setting could not be saved.' : 'Le réglage n’a pas pu être enregistré.')
     }
   }
 
@@ -290,6 +316,10 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
                 firstDayOfWeek={settings.firstDayOfWeek}
                 today={today}
                 onSaveDates={savePeriodStarts}
+                onEditPeriod={(startDate) => {
+                  setEventStartDate(startDate)
+                  setEventDialogOpen(true)
+                }}
                 locale={locale}
               />
             }
@@ -365,7 +395,10 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
             className="floating-add"
             type="button"
             aria-label={locale === 'en' ? 'Add an event' : 'Ajouter un événement'}
-            onClick={() => setEventDialogOpen(true)}
+            onClick={() => {
+              setEventStartDate(today)
+              setEventDialogOpen(true)
+            }}
           >
             <Plus size={24} aria-hidden="true" />
             <span>{locale === 'en' ? 'Add' : 'Ajouter'}</span>
@@ -374,7 +407,11 @@ function App({ store = defaultStore, today = getLocalCivilDate() }: AppProps) {
             open={eventDialogOpen}
             periods={periods}
             today={today}
-            onClose={() => setEventDialogOpen(false)}
+            initialStartDate={eventStartDate ?? today}
+            onClose={() => {
+              setEventDialogOpen(false)
+              setEventStartDate(null)
+            }}
             onSave={saveEvent}
             locale={locale}
           />

@@ -22,10 +22,18 @@ test('enregistre localement un début et le retrouve après rechargement dans le
   await expect(page.getByRole('button', { name: 'Mois précédent' })).toBeFocused()
   await recordStart(page, '2025-03-12')
   const calendar = page.getByRole('table', { name: 'Calendrier pour mars 2025' })
-  await expect(calendar.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
+  await expect(
+    calendar.getByRole('button', {
+      name: 'Modifier la période du 12 mars 2025 (débutée le 12 mars 2025)',
+    }),
+  ).toBeVisible()
 
   await page.reload()
-  await expect(calendar.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
+  await expect(
+    calendar.getByRole('button', {
+      name: 'Modifier la période du 12 mars 2025 (débutée le 12 mars 2025)',
+    }),
+  ).toBeVisible()
   const pageWidth = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
     content: document.documentElement.scrollWidth,

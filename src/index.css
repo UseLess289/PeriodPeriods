@@ -791,6 +791,27 @@ h2 {
   font: inherit;
   font-variant-numeric: tabular-nums;
 }
+.calendar-period-edit {
+  display: grid;
+  width: 2.7rem;
+  height: 3.1rem;
+  margin-inline: auto;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.calendar-period-edit time {
+  margin: 0;
+}
+.calendar-period-edit:hover {
+  background: var(--color-accent-soft);
+}
 .calendar-date-choice:hover:not(:disabled) {
   background: var(--color-accent-soft);
 }
@@ -1631,6 +1652,78 @@ h2 {
   .event-dialog-content > :not(.event-tile) {
     grid-column: 1 / -1;
   }
+  .event-step-progress {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .event-step-progress-track {
+    display: block;
+    width: 3.25rem;
+    height: 0.25rem;
+    flex: 0 0 auto;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--color-line);
+  }
+  .event-step-progress-track > span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    transform-origin: left center;
+    border-radius: inherit;
+    background: var(--color-accent-deep);
+    transition: transform var(--duration-base) var(--ease-standard);
+  }
+  .event-step-progress-track .is-first-step {
+    transform: scaleX(0.5);
+  }
+  .event-step-progress-track .is-second-step {
+    transform: scaleX(1);
+  }
+  .event-step-stack {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+    overflow: clip;
+  }
+  .event-dialog-stage {
+    display: grid;
+    grid-area: 1 / 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: var(--space-2);
+    min-width: 0;
+    align-self: start;
+  }
+  .event-dialog-stage > :not(.event-tile) {
+    grid-column: 1 / -1;
+  }
+  .event-step-back {
+    justify-self: start;
+    min-height: 2.75rem;
+    padding-inline: var(--space-2);
+  }
+  .event-step-description {
+    margin: 0;
+    color: var(--color-muted);
+    line-height: 1.4;
+  }
+  .event-period-context {
+    margin: 0;
+    padding: var(--space-2);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-sm);
+    background: var(--color-canvas);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
   .event-dialog .event-tile {
     gap: var(--space-1);
     min-width: 0;
@@ -1810,6 +1903,9 @@ h2 {
 }
 @media (max-width: 22rem) {
   .event-dialog-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .event-dialog-stage {
     grid-template-columns: minmax(0, 1fr);
   }
   .event-dialog .intensity-native-select {

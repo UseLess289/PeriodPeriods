@@ -41,6 +41,7 @@ type PeriodCalendarViewProps = {
   firstDayOfWeek: 0 | 1
   today: CivilDate
   onSaveDates: (dates: CivilDate[]) => Promise<string | null>
+  onEditPeriod: (startDate: CivilDate) => void
 }
 
 type MonthSwipeGesture = {
@@ -51,7 +52,7 @@ type MonthSwipeGesture = {
   lastTime: number
   velocityX: number
   isHorizontal: boolean
-  startedOnDateChoice: boolean
+  startedOnInteractiveDay: boolean
 }
 
 function getMonthDayCount(monthStart: CivilDate): number {
@@ -94,6 +95,7 @@ export function PeriodCalendarView({
   firstDayOfWeek,
   today,
   onSaveDates,
+  onEditPeriod,
   locale = 'fr',
 }: PeriodCalendarViewProps) {
   const text = (fr: string, en: string) => (locale === 'en' ? en : fr)
@@ -123,7 +125,7 @@ export function PeriodCalendarView({
   const lastDisplayed = displayedDays[displayedDays.length - 1].date
   const recordedSpans = periods
     .filter((period) => period.startDate <= lastDisplayed)
-    .map((period) => ({ start: period.startDate, duration: getPeriodDuration(period) }))
+    .map((period) => ({ period, start: period.startDate, duration: getPeriodDuration(period) }))
     .filter(({ start, duration }) => start >= firstDisplayed || daysBetweenCivilDates(start, firstDisplayed) < duration)
   const monthPeriodStarts = new Set(
     periods.filter((period) => period.startDate.startsWith(monthStart.slice(0, 7))).map((period) => period.startDate),
@@ -141,6 +143,10 @@ export function PeriodCalendarView({
   const recordedLabel = text('Début enregistré', 'Recorded period start')
   const centerLabel = text('Date centrale estimée', 'Central estimate')
   const addLabel = text('Ajouter plusieurs débuts', 'Add multiple period starts')
+  const editPeriodHint = text(
+    'Ouvre la période pour modifier sa durée et ses symptômes.',
+    'Open this period to edit its duration and symptoms.',
+  )
   const saveMessage =
     savedCount === 0
       ? ''
@@ -200,10 +206,10 @@ export function PeriodCalendarView({
     if (event.pointerType === 'mouse' || event.button !== 0 || isSaving) return
 
     const target = event.target instanceof Element ? event.target : null
-    const startedOnDateChoice = Boolean(target?.closest('.calendar-date-choice'))
+    const startedOnInteractiveDay = Boolean(target?.closest('.calendar-date-choice, .calendar-period-edit'))
     if (
       target?.closest('button, a, input, select, textarea, summary, [role="button"], [contenteditable="true"]') &&
-      !startedOnDateChoice
+      !startedOnInteractiveDay
     ) {
       return
     }
@@ -226,7 +232,7 @@ export function PeriodCalendarView({
       lastTime: event.timeStamp,
       velocityX: 0,
       isHorizontal: false,
-      startedOnDateChoice,
+      startedOnInteractiveDay,
     }
     event.stopPropagation()
 
@@ -270,7 +276,7 @@ export function PeriodCalendarView({
     gesture.lastX = event.clientX
     gesture.lastTime = event.timeStamp
 
-    if (gesture.startedOnDateChoice) suppressDateChoiceClickRef.current = true
+    if (gesture.startedOnInteractiveDay) suppressDateChoiceClickRef.current = true
   }
 
   function finishMonthSwipe(event: ReactPointerEvent<HTMLTableElement>) {
@@ -289,7 +295,7 @@ export function PeriodCalendarView({
     if (shouldChangeMonth) changeMonth(projectedDelta < 0 ? 1 : -1)
     else settleMonthSwipe()
 
-    if (gesture.startedOnDateChoice) {
+    if (gesture.startedOnInteractiveDay) {
       suppressDateChoiceClickRef.current = true
       window.setTimeout(() => {
         suppressDateChoiceClickRef.current = false
@@ -321,7 +327,7 @@ export function PeriodCalendarView({
   function preventDateClickAfterSwipe(event: ReactMouseEvent<HTMLTableElement>) {
     if (!suppressDateChoiceClickRef.current) return
     const target = event.target instanceof Element ? event.target : null
-    if (!target?.closest('.calendar-date-choice')) return
+    if (!target?.closest('.calendar-date-choice, .calendar-period-edit')) return
 
     event.preventDefault()
     event.stopPropagation()
@@ -463,6 +469,9 @@ export function PeriodCalendarView({
         </ul>
       )}
 
+      <p id="calendar-edit-period-hint" className="visually-hidden">
+        {editPeriodHint}
+      </p>
       <div
         className={`calendar-month-viewport${hasChangedMonth ? (monthDirection > 0 ? ' is-entering-next' : ' is-entering-previous') : ''}`}
         key={monthStart}
@@ -499,7 +508,13 @@ export function PeriodCalendarView({
                   const isRecordedDay = recordedSpans.some(
                     ({ start, duration }) => day.date >= start && daysBetweenCivilDates(start, day.date) < duration,
                   )
-                  const datePhases: Array<{ phase: CyclePhaseName; possible: boolean }> = []
+                  const editablePeriod = recordedSpans
+                    .filter(
+                      ({ start, duration }) =>
+                        start <= today && day.date >= start && daysBetweenCivilDates(start, day.date) < duration,
+                    )
+                    .sort((left, right) => right.start.localeCompare(left.start))[0]?.period
+                   const datePhases: Array<{ phase: CyclePhaseName; possible: boolean }> = []
                   if (day.inDisplayedMonth && !isRecordedDay && phaseRanges) {
                     for (const phase of cyclePhaseNames) {
                       const ranges = phaseRanges[phase]
@@ -550,6 +565,15 @@ export function PeriodCalendarView({
                       : []),
                   ]
                   const phaseDescriptionId = datePhases.length > 0 ? `phase-description-${day.date}` : undefined
+                  const calendarDayContents = (
+                    <>
+                      <span className="calendar-day-number">{dayNumber}</span>
+                      <span className="calendar-markers" aria-hidden="true">
+                        {isForecastRange && <span className="forecast-range-mark" />}
+                        {(isForecastLowerBound || isForecastUpperBound) && <span className="forecast-bound-mark" />}
+                      </span>
+                    </>
+                  )
                   const unavailableReason = hasPeriodStart
                     ? text('début déjà enregistré, non sélectionnable', 'period start already recorded, unavailable')
                     : isFuture
@@ -608,6 +632,21 @@ export function PeriodCalendarView({
                               {isSelected ? '✓' : ''}
                             </span>
                           </button>
+                        ) : editablePeriod ? (
+                          <button
+                            type="button"
+                            className="calendar-period-edit"
+                            aria-label={text(
+                              `Modifier la période du ${dateLabel} (débutée le ${formatCivilDate(editablePeriod.startDate, locale)})`,
+                              `Edit period day ${dateLabel}, starting ${formatCivilDate(editablePeriod.startDate, locale)}`,
+                            )}
+                            aria-describedby="calendar-edit-period-hint"
+                            onClick={() => onEditPeriod(editablePeriod.startDate)}
+                          >
+                            <time dateTime={day.date} aria-current={day.date === today ? 'date' : undefined}>
+                              {calendarDayContents}
+                            </time>
+                          </button>
                         ) : (
                           <time
                             dateTime={day.date}
@@ -621,13 +660,7 @@ export function PeriodCalendarView({
                                 : dateLabel
                             }
                           >
-                            <span className="calendar-day-number">{dayNumber}</span>
-                            <span className="calendar-markers" aria-hidden="true">
-                              {isForecastRange && <span className="forecast-range-mark" />}
-                              {(isForecastLowerBound || isForecastUpperBound) && (
-                                <span className="forecast-bound-mark" />
-                              )}
-                            </span>
+                            {calendarDayContents}
                           </time>
                         ))}
                       {day.inDisplayedMonth && phaseDescriptionId && (

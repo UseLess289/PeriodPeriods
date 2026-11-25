@@ -56,7 +56,11 @@ describe('PeriodPeriods app', () => {
     render(<App store={store} today="2025-03-20" />)
 
     const calendar = await screen.findByRole('table', { name: 'Calendrier pour mars 2025' })
-    expect(within(calendar).getByLabelText('Début enregistré le 12 mars 2025')).toBeInTheDocument()
+    expect(
+      within(calendar).getByRole('button', {
+        name: 'Modifier la période du 12 mars 2025 (débutée le 12 mars 2025)',
+      }),
+    ).toBeInTheDocument()
     expect(
       within(calendar).getByLabelText('Début enregistré pour une date à venir le 25 mars 2025'),
     ).toBeInTheDocument()
@@ -108,7 +112,11 @@ describe('PeriodPeriods app', () => {
       { startDate: '2025-03-16' },
     ])
 
-    expect(within(calendar).getByLabelText('Début enregistré le 16 mars 2025')).toBeInTheDocument()
+    expect(
+      within(calendar).getByRole('button', {
+        name: 'Modifier la période du 16 mars 2025 (débutée le 16 mars 2025)',
+      }),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Dernier début enregistré' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ouvrir le calendrier' })).not.toBeInTheDocument()
   })
