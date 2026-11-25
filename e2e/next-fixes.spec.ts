@@ -15,10 +15,11 @@ test('shows phase colors and possible-date halos in the calendar', async ({ page
 
   const ovulation = calendar.locator('time[datetime="2025-04-09"]')
   await expect(ovulation).toHaveAttribute('aria-describedby', 'phase-description-2025-04-09')
-  await expect(page.locator('#phase-description-2025-04-09')).toContainText('Ovulation estimée')
+  await expect(page.locator('#phase-description-2025-04-09')).toContainText('Pic d’ovulation estimé')
   await expect(page.locator('#phase-description-2025-04-09')).toContainText('phase folliculaire')
   await expect(page.locator('#phase-description-2025-04-09')).toContainText('phase lutéale')
   await expect(ovulation.locator('xpath=..')).toHaveClass(/phase-expected-ovulatory/)
+  await expect(ovulation.locator('xpath=..')).toHaveClass(/is-ovulation-peak/)
 
   const possibleOvulation = calendar.locator('time[datetime="2025-04-07"]')
   await expect(possibleOvulation).toHaveAttribute('aria-describedby', 'phase-description-2025-04-07')
@@ -30,6 +31,8 @@ test('shows phase colors and possible-date halos in the calendar', async ({ page
   const phaseLegend = page.getByRole('list', { name: 'Phases du cycle' })
   await expect(phaseLegend.getByRole('listitem')).toHaveCount(5)
   await expect(phaseLegend).toContainText('Dates possibles')
+  const calendarLegend = page.getByRole('list', { name: 'Légende du calendrier' })
+  await expect(calendarLegend).toContainText('Peak ovulation')
 })
 
 test('uses equal-width bottom navigation and shows Add only on Home', async ({ page }) => {
@@ -59,6 +62,7 @@ test('uses equal-width bottom navigation and shows Add only on Home', async ({ p
 })
 
 test('uses 1–3 ratings in every event popup intensity wheel', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/')
   await page.getByRole('button', { name: 'Ajouter un événement' }).click()
 
@@ -74,4 +78,6 @@ test('uses 1–3 ratings in every event popup intensity wheel', async ({ page })
   await wheels.first().press('End')
   await expect(wheels.first()).toHaveAttribute('aria-valuenow', '3')
   await expect(wheels.first()).toHaveAttribute('aria-valuetext', '3 / 3')
+  await wheels.first().press('ArrowUp')
+  await expect(wheels.first()).toHaveAttribute('aria-valuenow', '3')
 })

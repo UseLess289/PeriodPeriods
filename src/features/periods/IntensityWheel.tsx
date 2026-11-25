@@ -21,6 +21,7 @@ export function IntensityWheel({ id, label, value, emptyLabel, previousValue, on
   function position(wheel: HTMLDivElement, index: number) {
     const row = wheel.children[index] as HTMLElement
     const first = wheel.firstElementChild as HTMLElement
+    if (!row || !first) return
     wheel.scrollTop = row.offsetTop - first.offsetTop
   }
 
@@ -41,7 +42,9 @@ export function IntensityWheel({ id, label, value, emptyLabel, previousValue, on
 
   return (
     <div className="intensity-tile" data-rated={value !== undefined}>
-      <h3 id={`${id}-label`}>{label}</h3>
+      <label id={`${id}-label`} htmlFor={`${id}-select`}>
+        {label}
+      </label>
       <div className="intensity-wheel-frame">
         <div
           className="intensity-wheel"
@@ -84,7 +87,7 @@ export function IntensityWheel({ id, label, value, emptyLabel, previousValue, on
                 return
             }
             event.preventDefault()
-            choose(event.currentTarget, levels[Math.max(0, Math.min(5, next))])
+            choose(event.currentTarget, levels[Math.max(0, Math.min(levels.length - 1, next))])
           }}
           onClick={(event) => {
             const row = (event.target as HTMLElement).closest<HTMLElement>('[data-level]')
@@ -105,6 +108,23 @@ export function IntensityWheel({ id, label, value, emptyLabel, previousValue, on
           ))}
         </div>
       </div>
+      <select
+        id={`${id}-select`}
+        className="intensity-native-select"
+        aria-describedby="event-intensity-hint"
+        value={current}
+        onChange={(event) => {
+          const next = Number(event.target.value)
+          onChange(next === 0 ? undefined : (next as Intensity))
+        }}
+      >
+        <option value={0}>{emptyLabel}</option>
+        {levels.slice(1).map((level) => (
+          <option key={level} value={level}>
+            {level} / 3
+          </option>
+        ))}
+      </select>
       {previousValue && value === undefined && <p className="intensity-previous">{previousValue}</p>}
     </div>
   )

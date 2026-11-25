@@ -217,16 +217,123 @@ test('le bouton Ajouter ouvre la saisie, qui accepte une date passée et gère l
   await page.keyboard.press('Enter')
   const dialog = page.getByRole('dialog', { name: 'Enregistrer une période' })
   const start = dialog.getByLabel('Début des règles')
-  await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeFocused()
+  const cancel = dialog.getByRole('button', { name: 'Annuler' })
+  const save = dialog.getByRole('button', { name: 'Enregistrer' })
+  await expect(dialog.getByRole('heading', { name: 'Enregistrer une période' })).toBeFocused()
+  await expect(dialog.locator('details')).not.toHaveAttribute('open', '')
+  await expect(save).toBeInViewport()
+  await page.keyboard.press('Tab')
+  await expect(cancel).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(save).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(cancel).toBeFocused()
   await expect(start).toHaveValue('2025-03-20')
+  await start.fill('')
+  await save.click()
+  await expect(dialog.getByRole('alert')).toHaveText('Indique une date de début.')
+  await expect(start).toHaveAttribute('aria-invalid', 'true')
+  await expect(start).toBeFocused()
   await start.fill('2025-03-21')
+  await expect(dialog.getByRole('alert')).toHaveText('')
   expect(await start.evaluate((input: HTMLInputElement) => input.validity.rangeOverflow)).toBe(true)
+  await save.click()
+  await expect(dialog.getByRole('alert')).toHaveText('Choisis une date qui ne dépasse pas aujourd’hui.')
+  await expect(start).toHaveAttribute('aria-invalid', 'true')
+  await expect(start).toHaveAttribute('aria-describedby', 'event-form-error')
+  await expect(start).toBeFocused()
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
   await expect(add).toBeFocused()
 
   await recordStart(page, '2025-03-12')
+  await expect(page.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
+})
+
+test('le popup mobile reste lisible en petit écran et replie le suivi quotidien', async ({ page }) => {
+  await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 320, height: 568 },
+  ]) {
+    await page.setViewportSize(viewport)
+    await page.goto('/')
+    const add = page.getByRole('button', { name: 'Ajouter un événement' })
+    await add.click()
+
+    const dialog = page.getByRole('dialog', { name: 'Enregistrer une période' })
+    const details = dialog.locator('details')
+    const save = dialog.getByRole('button', { name: 'Enregistrer' })
+    await expect(dialog.getByRole('heading', { name: 'Enregistrer une période' })).toBeFocused()
+    await expect(dialog.getByLabel('Début des règles')).toBeInViewport()
+    await expect(dialog.getByLabel('Durée (jours)')).toBeInViewport()
+    await expect(save).toBeInViewport()
+    await expect(details.locator('summary')).toContainText('Suivi par jour')
+    await expect(details).not.toHaveAttribute('open', '')
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth),
+    ).toBe(true)
+    expect((await new AxeBuilder({ page }).include('.event-dialog').analyze()).violations).toEqual([])
+
+    await details.locator('summary').click()
+    const content = dialog.locator('.event-dialog-content')
+    const contentSize = await content.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    }))
+    if (viewport.width === 320) {
+      expect(contentSize.scrollHeight).toBeGreaterThan(contentSize.clientHeight)
+      await content.evaluate((element) => {
+        element.scrollTop = element.scrollHeight
+      })
+      await expect.poll(() => content.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    }
+    await expect(save).toBeInViewport()
+    const flow = dialog.getByRole('combobox', { name: 'Flux' })
+    await expect(flow).toBeVisible()
+    await flow.selectOption('3')
+    await expect(flow).toHaveValue('3')
+    await expect(save).toBeInViewport()
+    await dialog.getByRole('button', { name: 'Annuler' }).click()
+    await expect(dialog).toBeHidden()
+    await expect(add).toBeFocused()
+  }
+})
+
+test('le popup mobile conserve la saisie après un échec et confirme la reprise', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Ajouter un événement' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Enregistrer une période' })
+  const start = dialog.getByLabel('Début des règles')
+  const save = dialog.getByRole('button', { name: 'Enregistrer' })
+  await start.fill('2025-03-12')
+  await page.evaluate(() => {
+    const nativeAdd = IDBObjectStore.prototype.add
+    IDBObjectStore.prototype.add = function (...args) {
+      const request = nativeAdd.apply(this, args)
+      if (this.name === 'periods') {
+        IDBObjectStore.prototype.add = nativeAdd
+        this.transaction.abort()
+      }
+      return request
+    }
+  })
+
+  await save.click()
+  await expect(dialog.getByRole('alert')).toHaveText('L’enregistrement a échoué. Vérifie les données et réessaie.')
+  await expect(start).toHaveValue('2025-03-12')
+  await expect(save).toBeFocused()
+  await expect(save).toBeInViewport()
+
+  await save.click()
+  await expect(dialog).toBeHidden()
+  await expect(page.locator('.home-save-status')).toHaveText('Période enregistrée sur cet appareil.')
+  await expect(page.locator('.home-save-status')).toBeInViewport()
   await expect(page.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
 })
 
@@ -412,19 +519,23 @@ test('reste dans la largeur aux tailles cibles et conserve thèmes, contraste et
 
   await page.setViewportSize({ width: 320, height: 640 })
   await page.getByRole('button', { name: 'Ajouter un événement' }).click()
+  const compactDialog = page.getByRole('dialog')
+  await compactDialog.locator('details summary').click()
   const dialogSpacing = await page.evaluate(() => {
     const form = document.querySelector('#period-event-form')!.getBoundingClientRect()
     const save = document.querySelector('.event-save')!.getBoundingClientRect()
-    const formElement = document.querySelector('#period-event-form')!
+    const content = document.querySelector('.event-dialog-content')!
     return {
       gap: save.top - form.bottom,
-      canScroll: formElement.scrollHeight > formElement.clientHeight,
-      centerY: form.y + form.height / 2,
+      canScroll: content.scrollHeight > content.clientHeight,
     }
   })
   expect(dialogSpacing.gap).toBeGreaterThanOrEqual(8)
   expect(dialogSpacing.canScroll).toBe(true)
-  expect(dialogSpacing.centerY).toBeCloseTo(320, 0)
+  await compactDialog.locator('.event-dialog-content').evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+  })
+  await expect(compactDialog.getByRole('button', { name: 'Enregistrer' })).toBeInViewport()
   await page.keyboard.press('Escape')
 
   await page.emulateMedia({ colorScheme: 'dark', contrast: 'more', reducedMotion: 'reduce' })

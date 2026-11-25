@@ -1,4 +1,28 @@
 import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
+
+async function showDailyDetails(dialog: Locator) {
+  const details = dialog.locator('details')
+  if ((await details.count()) && !(await details.evaluate((element: HTMLDetailsElement) => element.open))) {
+    await details.locator('summary').click()
+  }
+}
+
+async function setIntensity(dialog: Locator, label: string, value: number) {
+  const select = dialog.getByRole('combobox', { name: label, exact: true })
+  if (await select.isVisible()) {
+    await select.selectOption(String(value))
+    return
+  }
+
+  const wheel = dialog.getByRole('spinbutton', { name: label, exact: true })
+  if (value === 0) await wheel.press('Home')
+  else if (value === 3) await wheel.press('End')
+  else {
+    await wheel.press('Home')
+    for (let step = 0; step < value; step += 1) await wheel.press('ArrowUp')
+  }
+}
 
 test('enregistre une période complète et la complète depuis la fenêtre de saisie', async ({ page }) => {
   await page.clock.install({ time: new Date('2025-03-20T12:00:00.000Z') })
@@ -9,10 +33,11 @@ test('enregistre une période complète et la complète depuis la fenêtre de sa
   const duration = dialog.getByRole('slider', { name: 'Durée (jours)' })
   await expect(duration).toHaveValue('5')
   await duration.press('ArrowLeft')
+  await showDailyDetails(dialog)
   await dialog.getByLabel('Jour de la période').selectOption('2')
-  await dialog.getByRole('spinbutton', { name: 'Flux', exact: true }).press('End')
-  await dialog.getByRole('spinbutton', { name: 'Maux de tête' }).press('ArrowUp')
-  await dialog.getByRole('spinbutton', { name: 'Crampes' }).press('ArrowUp')
+  await setIntensity(dialog, 'Flux', 3)
+  await setIntensity(dialog, 'Maux de tête', 1)
+  await setIntensity(dialog, 'Crampes', 1)
   await dialog.getByRole('button', { name: 'Enregistrer' }).click()
   await expect(dialog).not.toBeVisible()
   await expect(page.getByLabel('Début enregistré le 12 mars 2025')).toBeVisible()
@@ -22,10 +47,20 @@ test('enregistre une période complète et la complète depuis la fenêtre de sa
   await editing.getByLabel('Début des règles').fill('2025-03-12')
   await expect(editing.getByRole('heading', { name: 'Compléter une période' })).toBeVisible()
   await expect(editing.getByLabel('Durée (jours)')).toHaveValue('4')
+  await showDailyDetails(editing)
   await editing.getByLabel('Jour de la période').selectOption('2')
-  await expect(editing.getByRole('spinbutton', { name: 'Flux', exact: true })).toHaveAttribute('aria-valuenow', '3')
-  await expect(editing.getByRole('spinbutton', { name: 'Maux de tête' })).toHaveAttribute('aria-valuenow', '1')
-  await expect(editing.getByRole('spinbutton', { name: 'Crampes' })).toHaveAttribute('aria-valuenow', '1')
+  const flow = editing.getByRole('combobox', { name: 'Flux', exact: true })
+  const headaches = editing.getByRole('combobox', { name: 'Maux de tête' })
+  const cramps = editing.getByRole('combobox', { name: 'Crampes' })
+  if (await flow.isVisible()) {
+    await expect(flow).toHaveValue('3')
+    await expect(headaches).toHaveValue('1')
+    await expect(cramps).toHaveValue('1')
+  } else {
+    await expect(editing.getByRole('spinbutton', { name: 'Flux', exact: true })).toHaveAttribute('aria-valuenow', '3')
+    await expect(editing.getByRole('spinbutton', { name: 'Maux de tête' })).toHaveAttribute('aria-valuenow', '1')
+    await expect(editing.getByRole('spinbutton', { name: 'Crampes' })).toHaveAttribute('aria-valuenow', '1')
+  }
   await editing.getByRole('button', { name: 'Annuler' }).click()
 })
 
@@ -41,7 +76,11 @@ test('enregistre aujourd’hui avec deux taps au même endroit et exporte les jo
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByLabel('Début des règles')).toHaveValue('2025-03-20')
   await expect(dialog.getByLabel('Durée (jours)')).toHaveValue('5')
-  await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeFocused()
+  if ((page.viewportSize()?.width ?? 0) <= 480) {
+    await expect(dialog.getByRole('heading', { name: 'Enregistrer une période' })).toBeFocused()
+  } else {
+    await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeFocused()
+  }
   await page.mouse.click(x, y)
   await expect(dialog).toBeHidden()
   await expect(page.locator('.has-period-day')).toHaveCount(5)

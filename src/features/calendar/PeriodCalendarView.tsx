@@ -19,7 +19,7 @@ const phaseLabels: Record<CyclePhaseName, { fr: string; en: string }> = {
 const estimatedPhaseDescriptions: Record<CyclePhaseName, { fr: string; en: string }> = {
   menstrual: { fr: 'Règles estimées', en: 'Estimated menstrual phase' },
   follicular: { fr: 'Phase folliculaire estimée', en: 'Estimated follicular phase' },
-  ovulatory: { fr: 'Ovulation estimée', en: 'Estimated ovulation date' },
+  ovulatory: { fr: 'Pic d’ovulation estimé', en: 'Estimated ovulation peak' },
   luteal: { fr: 'Phase lutéale estimée', en: 'Estimated luteal phase' },
 }
 
@@ -509,6 +509,7 @@ export function PeriodCalendarView({
                   }
                   const expectedPhases = datePhases.filter(({ possible }) => !possible)
                   const possiblePhases = datePhases.filter(({ possible }) => possible)
+                  const isOvulationPeak = expectedPhases.some(({ phase }) => phase === 'ovulatory')
                   const phaseBackgroundLayers = datePhases.map(({ phase, possible }) => {
                     const opacity = possible ? 8 : 24
                     const color = `color-mix(in srgb, var(--phase-${phase}) ${opacity}%, transparent)`
@@ -575,6 +576,7 @@ export function PeriodCalendarView({
                         isForecastLowerBound || isForecastUpperBound ? 'is-estimated-bound' : '',
                         ...expectedPhases.map(({ phase }) => `phase-expected-${phase}`),
                         ...possiblePhases.map(({ phase }) => `phase-possible-${phase}`),
+                        isOvulationPeak ? 'is-ovulation-peak' : '',
                         estimate.kind !== 'insufficient' && estimate.isPast && isForecastCenter
                           ? 'is-estimate-past'
                           : '',
@@ -680,6 +682,12 @@ export function PeriodCalendarView({
           <li>
             <span className="forecast-center-mark" aria-hidden="true" />
             {text('Règles estimées', 'Estimated period')}
+          </li>
+        )}
+        {phaseRanges && (
+          <li>
+            <span className="ovulation-peak-mark" aria-hidden="true" />
+            {text('Pic d’ovulation estimé (Peak ovulation)', 'Peak ovulation')}
           </li>
         )}
       </ul>
